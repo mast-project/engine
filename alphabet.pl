@@ -5,13 +5,17 @@
                      grapheme//2, graphemes//2,
                      define_base_letter/2,
                      define_modifier/2,
-                     define_text_token/4,
+                     define_text_token/5,
+                     define_letter_class/3,
                      grapheme_pattern//2,
-                     grapheme_patsplit/4]).
+                     grapheme_patsplit/4,
+                     parse_single_grapheme//2,
+                     parse_grapheme_pattern//2]).
 :- use_module(library(unicode)).
 :- use_module(library(lists)).
+:- use_module(utils).
 
-:- dynamic base_letter/2, modifier/2, text_token/4,
+:- dynamic base_letter/2, modifier/2, text_token/5,
            letter_class/3.
 
 unicode_cluster(L) -->
@@ -56,7 +60,7 @@ grapheme(Alph, G) -->
     { append(B, M, G) }.
 
 next_token(Alph, G) -->
-    { text_token(Alph, Pfx, Classes, Sfx) },
+    { text_token(Alph, _, Pfx, Classes, Sfx) },
     clusters(Pfx),
     classes(Classes, L), { L \== [] }, clusters(Sfx),
     { append(Pfx, L, G0), append(G0, Sfx, G) }.
@@ -111,10 +115,13 @@ define_modifier(Alph, M) :-
     unicode_clusters(M, [NL]),
     assertz(modifier(Alph, NL)).
 
-define_text_token(Alph, Pfx, Classes, Sfx) :-
+define_text_token(Alph, Id, Pfx, Classes, Sfx) :-
     unicode_clusters(Pfx, PfxL),
     unicode_clusters(Sfx, SfxL),
-    assertz(text_token(Alph, PfxL, Classes, SfxL)).
+    assertz(text_token(Alph, Id, PfxL, Classes, SfxL)).
+
+define_letter_class(Alph, Id, Alts) :-
+    assertz(letter_class(Alph, Id, Alts)).
 
 grapheme_pattern(exact(G), [G | T], T) --> [G].
 grapheme_pattern(approx([GH | GT]), [[GH | GT0] | T], T) -->
@@ -142,7 +149,6 @@ grapheme_pattern((P1; P2), H, T) -->
 
 grapheme_pattern(P1 / P2, H, T), TC -->
     grapheme_pattern(P1, H, T),
-    { copy_term(T, TC) },
     grapheme_pattern(P2, TC, []).
 
 grapheme_pattern(?(P), H, T) -->
@@ -156,11 +162,26 @@ grapheme_pattern(*(P), H, T0) -->
 
 grapheme_pattern(*(_), H, H) --> [].
 
+grapheme_pattern(same(N, P), H, T) -->
+    grapheme_pattern(P, H, T0),
+    { N1 is N - 1, copy_term(H:T0, H0:[]) },
+    repeatn(N1, H0, T0, T).
+
 grapheme_pattern(P, H) --> grapheme_pattern(P, H, []).
+
+repeatn(N, _, H, H) --> { N =< 0 }, !.
+repeatn(N, L, H, T) -->
+    exact(L, H, T0),
+    { N1 is N - 1 },
+    repeatn(N1, L, T0, T).
+
+exact([], H, H) --> [].
+exact([C | L], [C | T], T0) -->
+    [C],
+    exact(L, T, T0).
 
 grapheme_patsplit(P, X, H, T) :-
     phrase(grapheme_pattern(P, H), X, T).
-
 
 check_token(Pfx, Cls, Sfx) -->
     Pfx,
@@ -175,19 +196,62 @@ check_token_middle(Cls) -->
 
 check_token_middle(_) --> [].
 
-parse_single_grapheme(G) -->
-    `\\`, !, grapheme(G).
+parse_single_grapheme(Alph, G) -->
+    `\\`, !, grapheme(Alph, G).
 
-parse_single_grapheme(G) -->
-    `'`, grapheme(G), `'`, !.
+parse_single_grapheme(Alph, G) -->
+    `'`, grapheme(Alph, G), `'`, !.
 
-parse_single_grapheme(G) -->
+parse_single_grapheme(Alph, G) -->
     \+ separator,
-    grapheme(G).
+    grapheme(Alph, G).
 
 separator --> [C], { code_type(C, space) }.
 separator --> `,`.
 separator --> `;`.
 
-pat_simple_grapheme(approx(G)) -->
-    `~`, !, parse_single_grapheme(G)).
+pat_atomic_grapheme(Alph, approx(G)) -->
+    `~`, !, parse_single_grapheme(Alph, G).
+pat_atomic_grapheme(_, contains(C)) -->
+    `_`, !, unicode_cluster(C).
+pat_atomic_grapheme(Alph, P) -->
+    `(`, parse_grapheme_pattern(Alph, P), `)`, !.
+pat_atomic_grapheme(Alph, ?(P)) -->
+    `[`, parse_grapheme_pattern(Alph, P), `]`, !.
+pat_atomic_grapheme(Alph, X) -->
+    `{`, id(Id), `}`, { class_or_token(Alph, Id, X) }, !.
+pat_atomic_grapheme(Alph, exact(G)) -->
+    parse_single_grapheme(Alph, G).
+
+class_or_token(Alph, Id, token(Pfx, Cls, Sfx)) :-
+    text_token(Alph, Id, Pfx, Cls, Sfx), !.
+
+class_or_token(Alph, Id, oneof(L)) :-
+    letter_class(Alph, Id, L).
+
+pat_repeat(Alph, *(P)) -->
+    pat_atomic_grapheme(Alph, P), `*`, !.
+pat_repeat(Alph, same(N, P)) -->
+    pat_atomic_grapheme(Alph, P),
+    [C], { code_type(C, digit(N)) }, !.
+pat_repeat(Alph, P) -->
+    pat_atomic_grapheme(Alph, P).
+
+pat_sequence(Alph, (P1, P2)) -->
+    pat_repeat(Alph, P1),
+    pat_sequence(Alph, P2), !.
+pat_sequence(Alph, P) --> pat_repeat(Alph, P).
+
+pat_lookahead(Alph, P1 / P2) -->
+    pat_sequence(Alph, P1), `/`, !,
+    pat_sequence(Alph, P2).
+
+pat_lookahead(Alph, P) -->
+    pat_sequence(Alph, P).
+
+parse_grapheme_pattern(Alph, (P1; P2)) -->
+    pat_lookahead(Alph, P1), `|`, !,
+    parse_grapheme_pattern(Alph, P2).
+
+parse_grapheme_pattern(Alph, P) -->
+    pat_lookahead(Alph, P).
