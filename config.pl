@@ -1,10 +1,10 @@
-:- module(config, [load_grammar_file/1]).
+ :- module(config, [load_grammar_file/1]).
 :- use_module(library(pio)).
 :- use_module(library(dcg/basics)).
 :- use_module(alphabet).
 :- use_module(utils).
 
-load_grammar_file(File) -->
+load_grammar_file(File) :-
     phrase_from_file(grammar_file, File).
 
 grammar_file --> blanks, eos, !.
@@ -37,15 +37,22 @@ alphabet_defs(Alph) -->
 
 alphabet_def(_) --> comment, !.
 alphabet_def(Alph) -->
-    `letters`, letters(Alph), blanks, `;`, !.
+    blanks, `letters`, letters(Alph), blanks, `;`, !.
 
 alphabet_def(Alph) -->
-    `modifiers`, modifiers(Alph), blanks, `;`, !.
+    blanks, `modifiers`, modifiers(Alph), blanks, `;`, !.
 
 alphabet_def(Alph) -->
-    `class`, blanks1, id(Name), !,
-    list_of_graphemes(LG), blanks, `;`,
+    blanks, `class`, blanks1, id(Name), !,
+    list_of_graphemes(Alph, LG), blanks, `;`,
     { define_letter_class(Alph, Name, LG) }.
+
+alphabet_def(Alph) -->
+    blanks, `token`, blanks1, id(Name), !,
+    uchars(Prefix),
+    blanks1, list_of_classes(Classes),
+    blanks1, uchars(Suffix), blanks, `;`,
+    { define_text_token(Alph, Name, Prefix, Classes, Suffix) }.
 
 alphabet_def(_) --> syntax_error('Unknown alphabet definition').
 
@@ -59,14 +66,28 @@ modifiers(_) --> [].
 
 modifier(Alph) --> blanks1, uchars(L), { define_modifier(Alph, L) }.
 
-uchars(L) --> `'`, !, string_without(`'`, L0), `'',
+uchars(L) --> `'`, !, string_without(`'`, L0), `'`, %'
     uchars(T),
     { append(L0, T, L) }.
 uchars([C | T]) --> uchar(C), !, uchars(T).
 uchars([]) --> [].
 
 uchar(C) --> `\\`, !, [C].
-uchar(C) --> `<U+`, 
+uchar(C) --> `<U+`, !, xinteger(C), `>`.
+uchar(C) --> [C], { C \== 0';, \+ code_type(C, space) }.
+
+list_of_graphemes(Alph, [G | T]) -->
+    blanks1,
+    parse_single_grapheme(Alph, G),
+    list_of_graphemes(Alph, T), !.
+list_of_graphemes(_, []) --> [].
+
+list_of_classes([C|T]) -->
+    id(C), blanks, `|`, blanks, !,
+    list_of_classes(T).
+list_of_classes([C]) -->
+    id(C), !.
+list_of_classes([]) --> [].
 
 comment -->
     blanks, `#`, !,
