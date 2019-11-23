@@ -44,12 +44,12 @@ alphabet_def(Alph) -->
 
 alphabet_def(Alph) -->
     blanks, `class`, blanks1, id(Name), !,
-    list_of_graphemes(Alph, LG), blanks, `;`,
+    list_of_graphemes(Alph, LG),
     { define_letter_class(Alph, Name, LG) }.
 
 alphabet_def(Alph) -->
-    blanks, `token`, blanks1, id(Name), !,
-    uchars(Prefix),
+    blanks, `token`, blanks1, id(Name), !, 
+    blanks1, uchars(Prefix),
     blanks1, list_of_classes(Classes),
     blanks1, uchars(Suffix), blanks, `;`,
     { define_text_token(Alph, Name, Prefix, Classes, Suffix) }.
@@ -80,7 +80,7 @@ list_of_graphemes(Alph, [G | T]) -->
     blanks1,
     parse_single_grapheme(Alph, G),
     list_of_graphemes(Alph, T), !.
-list_of_graphemes(_, []) --> [].
+list_of_graphemes(_, []) --> blanks, `;`.
 
 list_of_classes([C|T]) -->
     id(C), blanks, `|`, blanks, !,
