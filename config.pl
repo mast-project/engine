@@ -67,10 +67,12 @@ modifiers(_) --> [].
 modifier(Alph) --> blanks1, uchars(L), { define_modifier(Alph, L) }.
 
 uchars(L) --> `'`, !, string_without(`'`, L0), `'`, %'
-    uchars(T),
+    uchars0(T),
     { append(L0, T, L) }.
-uchars([C | T]) --> uchar(C), !, uchars(T).
-uchars([]) --> [].
+uchars([C | T]) --> uchar(C), !, uchars0(T).
+
+uchars0(L) --> uchars(L), !.
+uchars0([]) --> [].
 
 uchar(C) --> `\\`, !, [C].
 uchar(C) --> `<U+`, !, xinteger(C), `>`.
