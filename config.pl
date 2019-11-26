@@ -48,7 +48,7 @@ alphabet_def(Alph) -->
     { define_letter_class(Alph, Name, LG) }.
 
 alphabet_def(Alph) -->
-    blanks, `token`, blanks1, id(Name), !, 
+    blanks, `token`, blanks1, id(Name), !,
     blanks1, uchars(Prefix),
     blanks1, list_of_classes(Classes),
     blanks1, uchars(Suffix), blanks, `;`,
