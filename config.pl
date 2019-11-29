@@ -29,18 +29,18 @@ grammar_statement -->
 
 grammar_statement --> syntax_error('Unknown statement').
 
-alphabet_defs(_) --> blanks, `;`, !.
-
 alphabet_defs(Alph) -->
     alphabet_def(Alph), !,
-    alphabet_defs(Alph).
+    blanks,
+    (`;`, !;
+     `,`, alphabet_defs(Alph)).
 
 alphabet_def(_) --> comment, !.
 alphabet_def(Alph) -->
-    blanks, `letters`, letters(Alph), blanks, `;`, !.
+    blanks, `letters`, letters(Alph), !.
 
 alphabet_def(Alph) -->
-    blanks, `modifiers`, modifiers(Alph), blanks, `;`, !.
+    blanks, `modifiers`, modifiers(Alph), !.
 
 alphabet_def(Alph) -->
     blanks, `class`, blanks1, id(Name), !,

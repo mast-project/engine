@@ -7,12 +7,18 @@
                      define_letter_class/3,
                      grapheme_pattern//2,
                      grapheme_patsplit/4,
+                     grapheme_patsuffix/4,
                      parse_single_grapheme//2,
                      parse_grapheme_pattern//2,
                      parse_grapheme_pattern/3,
-                     graphemes_string/2]).
+                     graphemes_string/3,
+                     enum_graphemes/3,
+                     grapheme_replace/3,
+                     parse_grapheme_subst//2,
+                     parse_grapheme_subst/3]).
 :- use_module(library(unicode)).
 :- use_module(library(lists)).
+:- use_module(library(error)).
 :- use_module(utils).
 
 :- dynamic base_letter/2, modifier/2, text_token/5,
@@ -107,6 +113,8 @@ define_text_token(Alph, Id, Pfx, Classes, Sfx) :-
 define_letter_class(Alph, Id, Alts) :-
     assertz(letter_class(Alph, Id, Alts)).
 
+grapheme_pattern(null, X, X) --> [].
+
 grapheme_pattern(exact(G), [G | T], T) -->
     [G].
 
@@ -141,6 +149,10 @@ grapheme_pattern(P1 / P2, H, T), TC -->
     grapheme_pattern(P1, H, T),
     grapheme_pattern(P2, TC, []).
 
+grapheme_pattern(P1 - P2, H, T) -->
+    grapheme_pattern(P1, H, T),
+    { copy_term(H:T, H0:[]),
+      \+ phrase(grapheme_pattern(P2, _), H0) }.
 grapheme_pattern(?(P), H, T) -->
     grapheme_pattern(P, H, T).
 
@@ -172,6 +184,16 @@ exact([C | L], [C | T], T0) -->
 
 grapheme_patsplit(P, X, H, T) :-
     phrase(grapheme_pattern(P, H), X, T).
+
+grapheme_patsuffix(P, [], T) -->
+    grapheme_pattern(P, T).
+
+grapheme_patsuffix(P, [C | H], T) -->
+    [C],
+    grapheme_patsuffix(P, H, T).
+
+grapheme_patsuffix(P, X, H, T) :-
+    phrase(grapheme_patsuffix(P, H, T), X).
 
 parse_single_grapheme(Alph, G) -->
     `\\`, !, grapheme(Alph, G).
@@ -214,6 +236,7 @@ pat_repeat(Alph, same(N, P)) -->
 pat_repeat(Alph, P) -->
     pat_atomic_grapheme(Alph, P).
 
+pat_sequence(_, null) --> `()`, !.
 pat_sequence(Alph, (P1, P2)) -->
     pat_repeat(Alph, P1),
     pat_sequence(Alph, P2), !.
@@ -221,6 +244,10 @@ pat_sequence(Alph, P) --> pat_repeat(Alph, P).
 
 pat_lookahead(Alph, P1 / P2) -->
     pat_sequence(Alph, P1), `/`, !,
+    pat_sequence(Alph, P2).
+
+pat_lookahead(Alph, P1 - P2) -->
+    pat_sequence(Alph, P1), `\\`, !,
     pat_sequence(Alph, P2).
 
 pat_lookahead(Alph, P) -->
@@ -236,18 +263,163 @@ parse_grapheme_pattern(Alph, P) -->
 parse_grapheme_pattern(Alph, P, X) :-
     phrase(parse_grapheme_pattern(Alph, P), X).
 
-graphemes_string(G, N) :-
-    phrase(graphemes_string(G), L),
+graphemes_string(Alph, G, N) :-
+    phrase(graphemes_string(Alph, G), L),
     unicode_nfc(L, N).
 
-graphemes_string([H | T]) -->
-    grapheme_string(H),
-    graphemes_string(T).
+graphemes_string(Alph, [H | T]) -->
+    grapheme_string(Alph, H),
+    graphemes_string(Alph, T).
 
-graphemes_string([]) --> [].
+graphemes_string(_, []) --> [].
 
-grapheme_string([H | T]) -->
-    H,
-    grapheme_string(T).
+grapheme_string(_, grapheme(B, M)) -->
+    B,
+    modifiers_string(M).
 
-grapheme_string([]) --> [].
+grapheme_string(Alph, token(Name, Content)) -->
+    { text_token(Alph, Name, Pfx, _, Sfx) },
+    Pfx, Content, Sfx.
+
+modifiers_string([M | T]) -->
+    M,
+    modifiers_string(T).
+
+modifiers_string([]) --> [].
+
+enum_graphemes(_, null) --> [].
+enum_graphemes(_, exact(X)) --> [X].
+enum_graphemes(Alph, approx(grapheme(B, ML))) -->
+    { gen_modifiers(Alph, ML, ML0) },
+    [grapheme(B, ML0)].
+enum_graphemes(_, approx(token(N, C))) -->
+    { domain_error(infinite_pattern, approx(token(N, C))) }.
+enum_graphemes(Alph, contains(M)) -->
+    { base_letter(Alph, B),
+      gen_modifiers(Alph, [M], ML) },
+    [grapheme(B, ML)].
+enum_graphemes(_, token(N)) -->
+    { domain_error(infinite_pattern, token(N)) }.
+enum_graphemes(_, oneof(L)) -->
+    { member(X, L) },
+    [X].
+enum_graphemes(Alph, (X, Y)) -->
+    enum_graphemes(Alph, X),
+    enum_graphemes(Alph, Y).
+enum_graphemes(Alph, (X; Y)) -->
+    enum_graphemes(Alph, X);
+    enum_graphemes(Alph, Y).
+enum_graphemes(_, X / Y) -->
+    { domain_error(lookahead, X / Y) }.
+
+enum_graphemes(Alph, X - Y) -->
+    { enum_graphemes(Alph, X, L),
+      \+ phrase(grapheme_pattern(Y, _), L) },
+    L.
+
+enum_graphemes(Alph, ?(X)) -->
+    []; enum_graphemes(Alph, X).
+
+enum_graphemes(_, *(X)) -->
+    { domain_error(infinite_pattern, *(X)) }.
+
+enum_graphemes(Alph, same(N, X)) -->
+    { enum_graphemes(Alph, X, L) },
+    repeatn(N, L, _, _).
+
+enum_graphemes(Alph, P, X) :-
+    phrase(enum_graphemes(Alph, P), X).
+
+gen_modifiers(Alph, In, Out) :-
+    findall(M, modifier(Alph, M), ML),
+    subsets(In, ML, Out).
+gen_modifiers(_, [], []).
+
+subsets(In, S, Out) :-
+    S \= [],
+    subset(In, S),
+    (Out = S;
+     select(_, S, S0),
+     subsets(In, S0, Out)).
+
+grapheme_replace((R1, R2), S, T) -->
+    grapheme_replace(R1, S, T),
+    grapheme_replace(R2, S, T).
+
+grapheme_replace(exact(G), _, T) -->
+    { apply_transform(T, G, G0) },
+    [G0].
+
+grapheme_replace(N-M, S, T) -->
+    { range(N, M, S, L),
+      maplist(apply_transform(T), L, L0) },
+    L0.
+
+grapheme_replace(-N, S, T) -->
+    { length(Suff, N),
+      append(Pref, Suff, S), !,
+      maplist(apply_transform(T), Pref, Pref0) },
+    Pref0.
+grapheme_replace(-_, _, _) --> [].
+
+grapheme_replace(upper(R), S, T) -->
+    grapheme_replace(R, S, [upper | T]).
+
+grapheme_replace(lower(R), S, T) -->
+    grapheme_replace(R, S, [lower | T]).
+
+grapheme_replace(add(R, M), S, T) -->
+    grapheme_replace(R, S, [add(M) | T]).
+
+grapheme_replace(remove(R, M), S, T) -->
+    grapheme_replace(R, S, [remove(M) | T]).
+
+apply_transform([], X, X).
+apply_transform([H | T], X, Y) :-
+    apply_transform(T, X, X0),
+    apply_transform1(H, X0, Y).
+
+apply_transform1(upper, X, Y) :-
+    toupper_grapheme(X, Y).
+
+apply_transform1(lower, X, Y) :-
+    tolower_grapheme(X, Y).
+
+apply_transform1(add(M), grapheme(B, ML), grapheme(B, [M | ML])) :-
+    \+ memberchk(M, ML), !.
+apply_transform1(add(_), X, X).
+
+apply_transform1(remove(M), grapheme(B, ML), grapheme(B, ML0)) :-
+    selectchk(M, ML, ML0), !.
+apply_transform1(remove(_), X, X).
+
+toupper_grapheme(grapheme(B, M), grapheme(BU, MU)) :-
+    toupperl(B, BU),
+    maplist(toupperl, M, MU).
+toupper_grapheme(token(Name, C), token(Name, CU)) :-
+    toupperl(C, CU).
+
+tolower_grapheme(grapheme(B, M), grapheme(BU, MU)) :-
+    tolowerl(B, BU),
+    maplist(tolowerl, M, MU).
+tolower_grapheme(token(Name, C), token(Name, CU)) :-
+    tolowerl(C, CU).
+
+toupperl(L, LU) :- maplist(toupperc, L, LU).
+
+tolowerl(L, LU) :- maplist(tolowerc, L, LU).
+
+toupperc(X, U) :- unicode_property(X, uppercase_mapping(U)), !.
+toupperc(X, X).
+
+tolowerc(X, U) :- unicode_property(X, lowercase_mapping(U)), !.
+tolowerc(X, X).
+
+grapheme_replace(R, S, S1) :-
+    phrase(grapheme_replace(R, S, []), S1).
+
+%parse_grapheme_subst(Alph, (P1, P2)) -->
+%    subst_
+
+parse_grapheme_subst(Alph, P, X) :-
+    phrase(parse_grapheme_subst(Alph, P), X).
