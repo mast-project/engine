@@ -1,4 +1,5 @@
-:- module(utils, [id//1, range/4]).
+:- module(utils, [id//1, range/4, expect//1, appendv/3]).
+:- use_module(library(pio)).
 
 id(Id) --> idchars(L), { atom_codes(Id, L) }.
 
@@ -23,3 +24,11 @@ range(N, M, [_ | L], L0) :-
     range(N1, M1, L, L0), !.
 
 range(_, _, _, []).
+
+expect(L) --> L, !.
+expect(L) --> syntax_error(expect(L)).
+
+appendv(L, H, T) :-
+    phrase(appendl(L), H, T).
+
+appendl(L) --> L.

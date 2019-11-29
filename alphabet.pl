@@ -5,6 +5,8 @@
                      define_modifier/2,
                      define_text_token/5,
                      define_letter_class/3,
+                     define_transform_rule/5,
+                     define_rec_transform_rule/4,
                      grapheme_pattern//2,
                      grapheme_patsplit/4,
                      grapheme_patsuffix/4,
@@ -12,17 +14,21 @@
                      parse_grapheme_pattern//2,
                      parse_grapheme_pattern/3,
                      graphemes_string/3,
+                     valid_grapheme/2,
                      enum_graphemes/3,
                      grapheme_replace/3,
                      parse_grapheme_subst//2,
-                     parse_grapheme_subst/3]).
+                     parse_grapheme_subst/3,
+                     transform_graphemes/4]).
+:- use_module(library(dcg/basics)).
 :- use_module(library(unicode)).
 :- use_module(library(lists)).
+:- use_module(library(apply)).
 :- use_module(library(error)).
 :- use_module(utils).
 
 :- dynamic base_letter/2, modifier/2, text_token/5,
-           letter_class/3.
+           letter_class/3, transform_rule/6.
 
 nfd_codes(X, L) :-
     unicode_nfd(X, N),
@@ -33,10 +39,13 @@ unicode_cluster([C | T]) -->
     unicode_cluster_extend(T).
 
 unicode_cluster_extend([C | T]) -->
-    [C],
-    { unicode_property(C, extend(true)) }, !,
+    unicode_extend_char(C), !,
     unicode_cluster_extend(T).
 unicode_cluster_extend([]) --> [].
+
+unicode_extend_char(C) -->
+    [C],
+    { unicode_property(C, extend(true)) }.
 
 unicode_cluster_nfd(NL) -->
     unicode_cluster(L),
@@ -61,7 +70,8 @@ grapheme(Alph, token(Name, Content)) -->
 
 grapheme(Alph, grapheme(B, M)) -->
     base_grapheme(Alph, B),
-    modifiers(Alph, M).
+    modifiers(Alph, M),
+    \+ unicode_extend_char(_).
 
 next_token(Alph, Name, Contents) -->
     { text_token(Alph, Name, Pfx, Classes, Sfx) },
@@ -112,6 +122,12 @@ define_text_token(Alph, Id, Pfx, Classes, Sfx) :-
 
 define_letter_class(Alph, Id, Alts) :-
     assertz(letter_class(Alph, Id, Alts)).
+
+define_transform_rule(Id, SAlph, P, DAlph, R) :-
+    assertz(transform_rule(Id, SAlph, P, DAlph, R, false)).
+
+define_rec_transform_rule(Id, SAlph, P, R) :-
+    assertz(transform_rule(Id, SAlph, P, SAlph, R, true)).
 
 grapheme_pattern(null, X, X) --> [].
 
@@ -232,11 +248,11 @@ pat_repeat(Alph, *(P)) -->
     pat_atomic_grapheme(Alph, P), `*`, !.
 pat_repeat(Alph, same(N, P)) -->
     pat_atomic_grapheme(Alph, P),
-    [C], { code_type(C, digit(N)) }, !.
+    [C], { code_type(C, digit(N)), N > 1 }, !.
 pat_repeat(Alph, P) -->
     pat_atomic_grapheme(Alph, P).
 
-pat_sequence(_, null) --> `()`, !.
+pat_sequence(_, null) --> `0`, !.
 pat_sequence(Alph, (P1, P2)) -->
     pat_repeat(Alph, P1),
     pat_sequence(Alph, P2), !.
@@ -286,6 +302,13 @@ modifiers_string([M | T]) -->
     modifiers_string(T).
 
 modifiers_string([]) --> [].
+
+valid_grapheme(Alph, grapheme(B, M)) :-
+    base_letter(Alph, B),
+    maplist(modifier(Alph), M).
+valid_grapheme(Alph, token(Name, Contents)) :-
+    text_token(Alph, Name, _, Classes, _),
+    phrase(of_classes(Classes, _), Contents).
 
 enum_graphemes(_, null) --> [].
 enum_graphemes(_, exact(X)) --> [X].
@@ -342,6 +365,8 @@ subsets(In, S, Out) :-
      select(_, S, S0),
      subsets(In, S0, Out)).
 
+grapheme_replace(null, _, _) --> [].
+
 grapheme_replace((R1, R2), S, T) -->
     grapheme_replace(R1, S, T),
     grapheme_replace(R2, S, T).
@@ -373,6 +398,14 @@ grapheme_replace(add(R, M), S, T) -->
 
 grapheme_replace(remove(R, M), S, T) -->
     grapheme_replace(R, S, [remove(M) | T]).
+
+grapheme_replace(repeat(0, _), _, _) --> !, [].
+grapheme_replace(repeat(1, R), S, T) --> !,
+    grapheme_replace(R, S, T).
+grapheme_replace(repeat(N, R), S, T) -->
+    grapheme_replace(R, S, T),
+    { N1 is N - 1 },
+    grapheme_replace(repeat(N1, R), S, T).
 
 apply_transform([], X, X).
 apply_transform([H | T], X, Y) :-
@@ -418,8 +451,77 @@ tolowerc(X, X).
 grapheme_replace(R, S, S1) :-
     phrase(grapheme_replace(R, S, []), S1).
 
-%parse_grapheme_subst(Alph, (P1, P2)) -->
-%    subst_
+parse_grapheme_subst(_, null) --> `0`, !.
+parse_grapheme_subst(Alphs, (P1, P2)) -->
+    parse_subst_repeat(Alphs, P1),
+    parse_grapheme_subst(Alphs, P2), !.
+parse_grapheme_subst(Alphs, P) -->
+    parse_subst_repeat(Alphs, P).
 
-parse_grapheme_subst(Alph, P, X) :-
-    phrase(parse_grapheme_subst(Alph, P), X).
+parse_subst_repeat(Alphs, repeat(N, P)) -->
+    parse_subst_elem(Alphs, P),
+    [C], { code_type(C, digit(N)), N > 1 }, !.
+
+parse_subst_repeat(Alphs, P) -->
+    parse_subst_elem(Alphs, P).
+
+parse_subst_elem(Alphs, P) -->
+    parse_subst_var(Alphs, P), !.
+parse_subst_elem(_/Alph, exact(G)) -->
+    parse_single_grapheme(Alph, G).
+
+parse_subst_var(Alphs, P0) -->
+    parse_subst_var0(Alphs, P),
+    parse_subst_transforms(Alphs, P, P0).
+
+parse_subst_var0(Alphs, P) -->
+    `(`, !,
+      parse_grapheme_subst(Alphs, P),
+      `)`.
+
+parse_subst_var0(_, 1-inf) --> `{}`, !.
+parse_subst_var0(_, N-M) -->
+    `{`, integer(N), { N > 0 },
+      ( integer(M0), { M0 < 0, M is -M0, M >= N }, !;
+        `-`, { M = inf }, !;
+        [], { M = N }), `}`, !.
+parse_subst_var0(_, -N) -->
+    `{/`, integer(N), { N > 0 }, `}`, !.
+
+parse_subst_transforms(Alphs, P, P1) -->
+    parse_subst_transform(Alphs, P, P0), !,
+    parse_subst_transforms(Alphs, P0, P1).
+
+parse_subst_transforms(_, P, P) --> [].
+
+parse_subst_transform(_, P, upper(P)) --> `^`.
+parse_subst_transform(_, P, lower(P)) --> `!`.
+parse_subst_transform(SAlph/_, P, remove(P, M)) -->
+    `-`, modifier(SAlph, M).
+parse_subst_transform(_/DAlph, P, add(P, M)) -->
+    `+`, modifier(DAlph, M).
+
+parse_grapheme_subst(Alphs, P, X) :-
+    phrase(parse_grapheme_subst(Alphs, P), X).
+
+transform_graphemes(Rule, SAlph/DAlph, A, B), X -->
+    { transform_rule(Rule, SAlph, P, SAlph, R, true) },
+    grapheme_pattern(P, L),
+    { grapheme_replace(R, L, X) }, !,
+    transform_graphemes(Rule, SAlph/DAlph, A, B).
+
+transform_graphemes(Rule, SAlph/DAlph, A, B) -->
+    { transform_rule(Rule, SAlph, P, DAlph, R, false) },
+    grapheme_pattern(P, L),
+    { grapheme_replace(R, L, X), !, appendv(X, A, B0) },
+    transform_graphemes(Rule, SAlph/DAlph, B0, B).
+
+transform_graphemes(Rule, Alph/Alph, [G | A], B) -->
+    [G], !,
+    transform_graphemes(Rule, Alph/Alph, A, B).
+
+transform_graphemes(_, _, H, H) --> [].
+
+
+transform_graphemes(Rule, Alphs, X, Y) :-
+    phrase(transform_graphemes(Rule, Alphs, Y, []), X).

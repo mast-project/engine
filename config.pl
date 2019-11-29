@@ -27,13 +27,18 @@ grammar_statement -->
     id(Alph),
     alphabet_defs(Alph).
 
+grammar_statement -->
+    blanks, `transform`, blanks1, !,
+    id(Rule), blanks, `:`, blanks, id(SAlph), blanks, `->`, id(DAlph),
+    transform_defs(Rule, SAlph, DAlph)
+
 grammar_statement --> syntax_error('Unknown statement').
 
 alphabet_defs(Alph) -->
     alphabet_def(Alph), !,
     blanks,
     (`;`, !;
-     `,`, alphabet_defs(Alph)).
+     expect(`,`), alphabet_defs(Alph)).
 
 alphabet_def(_) --> comment, !.
 alphabet_def(Alph) -->
@@ -51,7 +56,7 @@ alphabet_def(Alph) -->
     blanks, `token`, blanks1, id(Name), !,
     blanks1, uchars(Prefix),
     blanks1, list_of_classes(Classes),
-    blanks1, uchars(Suffix), blanks, `;`,
+    blanks1, uchars(Suffix),
     { define_text_token(Alph, Name, Prefix, Classes, Suffix) }.
 
 alphabet_def(_) --> syntax_error('Unknown alphabet definition').
@@ -76,13 +81,13 @@ uchars0([]) --> [].
 
 uchar(C) --> `\\`, !, [C].
 uchar(C) --> `<U+`, !, xinteger(C), `>`.
-uchar(C) --> [C], { C \== 0';, \+ code_type(C, space) }.
+uchar(C) --> [C], { C \== 0';, C \== 0',, \+ code_type(C, space) }.
 
 list_of_graphemes(Alph, [G | T]) -->
     blanks1,
     parse_single_grapheme(Alph, G),
     list_of_graphemes(Alph, T), !.
-list_of_graphemes(_, []) --> blanks, `;`.
+list_of_graphemes(_, []) --> [].
 
 list_of_classes([C|T]) -->
     id(C), blanks, `|`, blanks, !,
