@@ -13,6 +13,8 @@
                      parse_single_grapheme//2,
                      parse_grapheme_pattern//2,
                      parse_grapheme_pattern/3,
+                     parse_grapheme_simple_pattern//2,
+                     parse_grapheme_simple_pattern/3,                     
                      graphemes_string/3,
                      valid_grapheme/2,
                      enum_graphemes/3,
@@ -286,6 +288,34 @@ parse_grapheme_pattern(Alph, P) -->
 
 parse_grapheme_pattern(Alph, P, X) :-
     phrase(parse_grapheme_pattern(Alph, P), X).
+
+pat_simple_grapheme(_, fence) --> `#`.
+pat_simple_grapheme(Alph, contains(C)) -->
+    `_`, !, modifier(Alph, C).
+pat_simple_grapheme(Alph, ?(P)) -->
+    `[`, parse_grapheme_simple_pattern(Alph, P), `]`, !.
+pat_simple_grapheme(Alph, X) -->
+    `{`, id(Id), `}`, { class_or_token(Alph, Id, X) }, !.
+pat_simple_grapheme(Alph, exact(G)) -->
+    parse_single_grapheme(Alph, G).
+
+pat_simple_repeat(Alph, *(P)) -->
+    pat_simple_grapheme(Alph, P), `*`, !.
+pat_simple_repeat(Alph, same(N, P)) -->
+    pat_simple_grapheme(Alph, P),
+    [C], { code_type(C, digit(N)), N > 1 }, !.
+pat_simple_repeat(Alph, P) -->
+    pat_simple_grapheme(Alph, P).
+
+parse_grapheme_simple_pattern(_, null) --> `0`, !.
+parse_grapheme_simple_pattern(Alph, (P1, P2)) -->
+    pat_simple_repeat(Alph, P1),
+    parse_grapheme_simple_pattern(Alph, P2), !.
+parse_grapheme_simple_pattern(Alph, P) -->
+    pat_simple_repeat(Alph, P).
+
+parse_grapheme_simple_pattern(Alph, P, X) :-
+    phrase(parse_grapheme_simple_pattern(Alph, P), X).
 
 graphemes_string(Alph, G, N) :-
     phrase(graphemes_string(Alph, G), L),
