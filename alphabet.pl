@@ -7,7 +7,7 @@
                      define_letter_class/3,
                      define_transform_rule/5,
                      define_rec_transform_rule/4,
-                     grapheme_pattern//2,
+                     grapheme_pattern//3,
                      grapheme_patsplit/4,
                      grapheme_patsuffix/4,
                      parse_single_grapheme//2,
@@ -129,63 +129,74 @@ define_transform_rule(Id, SAlph, P, DAlph, R) :-
 define_rec_transform_rule(Id, SAlph, P, R) :-
     assertz(transform_rule(Id, SAlph, P, SAlph, R, true)).
 
-grapheme_pattern(null, X, X) --> [].
+grapheme_pattern(_, fence, X, X) --> eos, !.
+grapheme_pattern(true, fence, X, X) --> [].
 
-grapheme_pattern(exact(G), [G | T], T) -->
+grapheme_pattern(_, null, X, X) --> [].
+
+grapheme_pattern(_, exact(G), [G | T], T) -->
     [G].
 
-grapheme_pattern(approx(grapheme(B, M)), [grapheme(B, M0) | T], T) -->
+grapheme_pattern(_, approx(grapheme(B, M)), [grapheme(B, M0) | T], T) -->
     [grapheme(B, M0)],
     { subset(M, M0) }.
 
-grapheme_pattern(approx(token(N, L)), [token(N, L0) | T], T) -->
+grapheme_pattern(_, approx(token(N, L)), [token(N, L0) | T], T) -->
     [token(N, L0)],
     { append(L, _, L0) }.
 
-grapheme_pattern(contains(C), [grapheme(B, M) | T], T) -->
+grapheme_pattern(_, contains(C), [grapheme(B, M) | T], T) -->
     [grapheme(B, M)],
     { memberchk(C, M) }.
 
-grapheme_pattern(token(Name), [token(Name, Contents) | T], T) -->
+grapheme_pattern(_, token(Name), [token(Name, Contents) | T], T) -->
     [token(Name, Contents)].
 
-grapheme_pattern(oneof(L), [G | T], T) -->
+grapheme_pattern(_, oneof(L), [G | T], T) -->
     [G],
     { memberchk(G, L) }.
 
-grapheme_pattern((P1, P2), H, T0) -->
-    grapheme_pattern(P1, H, T),
-    grapheme_pattern(P2, T, T0).
+grapheme_pattern(Fence, (P1, P2), H, T0) -->
+    grapheme_pattern(Fence, P1, H, T),
+    {advance(Fence, H, T, Fence0)},
+    grapheme_pattern(Fence0, P2, T, T0).
 
-grapheme_pattern((P1; P2), H, T) -->
-    grapheme_pattern(P1, H, T),
-    grapheme_pattern(P2, H, T).
+grapheme_pattern(Fence, (P1; P2), H, T) -->
+    grapheme_pattern(Fence, P1, H, T),
+    grapheme_pattern(Fence, P2, H, T).
 
-grapheme_pattern(P1 / P2, H, T), TC -->
-    grapheme_pattern(P1, H, T),
-    grapheme_pattern(P2, TC, []).
+grapheme_pattern(Fence, P1 / P2, H, T), TC -->
+    grapheme_pattern(Fence, P1, H, T),
+    {advance(Fence, H, T, Fence0)},
+    grapheme_pattern(Fence0, P2, TC, []).
 
-grapheme_pattern(P1 - P2, H, T) -->
-    grapheme_pattern(P1, H, T),
+grapheme_pattern(Fence, P1 - P2, H, T) -->
+    grapheme_pattern(Fence, P1, H, T),
+    {advance(Fence, H, T, Fence0)},
     { copy_term(H:T, H0:[]),
-      \+ phrase(grapheme_pattern(P2, _), H0) }.
-grapheme_pattern(?(P), H, T) -->
-    grapheme_pattern(P, H, T).
+      \+ phrase(grapheme_pattern(Fence0, P2, _), H0) }.
+grapheme_pattern(Fence, ?(P), H, T) -->
+    grapheme_pattern(Fence, P, H, T).
 
-grapheme_pattern(?(_), H, H) --> [].
+grapheme_pattern(_, ?(_), H, H) --> [].
 
-grapheme_pattern(*(P), H, T0) -->
-    grapheme_pattern(P, H, T),
-    grapheme_pattern(*(P), T, T0).
+grapheme_pattern(Fence, *(P), H, T0) -->
+    grapheme_pattern(Fence, P, H, T),
+    {advance(Fence, H, T, Fence0)},
+    grapheme_pattern(Fence0, *(P), T, T0).
 
-grapheme_pattern(*(_), H, H) --> [].
+grapheme_pattern(_, *(_), H, H) --> [].
 
-grapheme_pattern(same(N, P), H, T) -->
-    grapheme_pattern(P, H, T0),
+grapheme_pattern(Fence, same(N, P), H, T) -->
+    grapheme_pattern(Fence, P, H, T0),
     { N1 is N - 1, copy_term(H:T0, H0:[]) },
     repeatn(N1, H0, T0, T).
 
-grapheme_pattern(P, H) --> grapheme_pattern(P, H, []).
+grapheme_pattern(Fence, P, H) --> grapheme_pattern(Fence, P, H, []).
+
+advance(false, _, _, false) :- !.
+advance(true, H, T, false) :- H \= T, !.
+advance(true, _, _, true).
 
 repeatn(N, _, H, H) --> { N =< 0 }, !.
 repeatn(N, L, H, T) -->
@@ -199,17 +210,17 @@ exact([C | L], [C | T], T0) -->
     exact(L, T, T0).
 
 grapheme_patsplit(P, X, H, T) :-
-    phrase(grapheme_pattern(P, H), X, T).
+    phrase(grapheme_pattern(true, P, H), X, T).
 
-grapheme_patsuffix(P, [], T) -->
-    grapheme_pattern(P, T).
+grapheme_patsuffix(Fence, P, [], T) -->
+    grapheme_pattern(Fence, P, T).
 
-grapheme_patsuffix(P, [C | H], T) -->
+grapheme_patsuffix(_, P, [C | H], T) -->
     [C],
-    grapheme_patsuffix(P, H, T).
+    grapheme_patsuffix(false, P, H, T).
 
 grapheme_patsuffix(P, X, H, T) :-
-    phrase(grapheme_patsuffix(P, H, T), X).
+    phrase(grapheme_patsuffix(true, P, H, T), X).
 
 parse_single_grapheme(Alph, G) -->
     `\\`, !, grapheme(Alph, G).
@@ -221,10 +232,7 @@ parse_single_grapheme(Alph, G) -->
     \+ separator,
     grapheme(Alph, G).
 
-separator --> [C], { code_type(C, space) }.
-separator --> `,`.
-separator --> `;`.
-
+pat_atomic_grapheme(_, fence) --> `#`.
 pat_atomic_grapheme(Alph, approx(B, M)) -->
     `~`, !, parse_single_grapheme(Alph, grapheme(B, M)).
 pat_atomic_grapheme(Alph, contains(C)) -->
@@ -310,6 +318,8 @@ valid_grapheme(Alph, token(Name, Contents)) :-
     text_token(Alph, Name, _, Classes, _),
     phrase(of_classes(Classes, _), Contents).
 
+enum_graphemes(_, border) -->
+    { domain_error(lookahead, border) }.
 enum_graphemes(_, null) --> [].
 enum_graphemes(_, exact(X)) --> [X].
 enum_graphemes(Alph, approx(grapheme(B, ML))) -->
@@ -337,7 +347,7 @@ enum_graphemes(_, X / Y) -->
 
 enum_graphemes(Alph, X - Y) -->
     { enum_graphemes(Alph, X, L),
-      \+ phrase(grapheme_pattern(Y, _), L) },
+      \+ phrase(grapheme_pattern(_, Y, _), L) },
     L.
 
 enum_graphemes(Alph, ?(X)) -->
@@ -399,6 +409,10 @@ grapheme_replace(add(R, M), S, T) -->
 grapheme_replace(remove(R, M), S, T) -->
     grapheme_replace(R, S, [remove(M) | T]).
 
+grapheme_replace(apply(Id, Alphs, R), S, T) -->
+    grapheme_replace(R, S, [apply(Id, Alphs) | T]).
+
+
 grapheme_replace(repeat(0, _), _, _) --> !, [].
 grapheme_replace(repeat(1, R), S, T) --> !,
     grapheme_replace(R, S, T).
@@ -409,8 +423,8 @@ grapheme_replace(repeat(N, R), S, T) -->
 
 apply_transform([], X, X).
 apply_transform([H | T], X, Y) :-
-    apply_transform(T, X, X0),
-    apply_transform1(H, X0, Y).
+    apply_transform1(H, X, X0),
+    apply_transform(T, X0, Y).
 
 apply_transform1(upper, X, Y) :-
     toupper_grapheme(X, Y).
@@ -425,6 +439,9 @@ apply_transform1(add(_), X, X).
 apply_transform1(remove(M), grapheme(B, ML), grapheme(B, ML0)) :-
     selectchk(M, ML, ML0), !.
 apply_transform1(remove(_), X, X).
+
+apply_transform1(apply(Id, Alphs), X, Y) :-
+    transform_graphemes(Id, Alphs, [X], [Y]).
 
 toupper_grapheme(grapheme(B, M), grapheme(BU, MU)) :-
     toupperl(B, BU),
@@ -475,6 +492,13 @@ parse_subst_var(Alphs, P0) -->
     parse_subst_transforms(Alphs, P, P0).
 
 parse_subst_var0(Alphs, P) -->
+    `@`, !, id(Id),
+    `(`,
+      parse_grapheme_subst(Alphs, P0),
+      `)`,
+    { subst_func(Id, Alphs, P0, P) }.
+
+parse_subst_var0(Alphs, P) -->
     `(`, !,
       parse_grapheme_subst(Alphs, P),
       `)`.
@@ -494,34 +518,40 @@ parse_subst_transforms(Alphs, P, P1) -->
 
 parse_subst_transforms(_, P, P) --> [].
 
-parse_subst_transform(_, P, upper(P)) --> `^`.
-parse_subst_transform(_, P, lower(P)) --> `!`.
 parse_subst_transform(SAlph/_, P, remove(P, M)) -->
     `-`, modifier(SAlph, M).
 parse_subst_transform(_/DAlph, P, add(P, M)) -->
     `+`, modifier(DAlph, M).
 
+subst_func(upper, _, P, upper(P)) :- !.
+subst_func(lower, _, P, lower(P)) :- !.
+subst_func(Id, Alphs, P, apply(Id, Alphs, P)).
+
 parse_grapheme_subst(Alphs, P, X) :-
     phrase(parse_grapheme_subst(Alphs, P), X).
 
-transform_graphemes(Rule, SAlph/DAlph, A, B), X -->
-    { transform_rule(Rule, SAlph, P, SAlph, R, true) },
-    grapheme_pattern(P, L),
-    { grapheme_replace(R, L, X) }, !,
-    transform_graphemes(Rule, SAlph/DAlph, A, B).
+transform_graphemes(Fence, Rule, SAlph/DAlph, A, B) -->
+    transform_rec_grapheme(Fence, Rule, SAlph), !,
+    transform_graphemes(Fence, Rule, SAlph/DAlph, A, B).
 
-transform_graphemes(Rule, SAlph/DAlph, A, B) -->
+transform_graphemes(Fence, Rule, SAlph/DAlph, A, B) -->
     { transform_rule(Rule, SAlph, P, DAlph, R, false) },
-    grapheme_pattern(P, L),
-    { grapheme_replace(R, L, X), !, appendv(X, A, B0) },
-    transform_graphemes(Rule, SAlph/DAlph, B0, B).
+    grapheme_pattern(Fence, P, L),
+    { grapheme_replace(R, L, X), !, appendv(X, A, B0),
+      advance(Fence, L, [], Fence0) },
+    transform_graphemes(Fence0, Rule, SAlph/DAlph, B0, B).
 
-transform_graphemes(Rule, Alph/Alph, [G | A], B) -->
+transform_graphemes(_, Rule, Alph/Alph, [G | A], B) -->
     [G], !,
-    transform_graphemes(Rule, Alph/Alph, A, B).
+    transform_graphemes(false, Rule, Alph/Alph, A, B).
 
-transform_graphemes(_, _, H, H) --> [].
+transform_graphemes(_, _, _, H, H) --> [].
 
+transform_rec_grapheme(Fence, Rule, SAlph), X -->
+    { transform_rule(Rule, SAlph, P, SAlph, R, true) },
+    grapheme_pattern(Fence, P, L),
+    { grapheme_replace(R, L, X) }.
 
-transform_graphemes(Rule, Alphs, X, Y) :-
-    phrase(transform_graphemes(Rule, Alphs, Y, []), X).
+transform_graphemes(Rule, SAlph/DAlph, X, Y) :-
+    phrase(transform_graphemes(true, Rule, SAlph/DAlph, Y, []), X),
+    maplist(valid_grapheme(DAlph), Y).

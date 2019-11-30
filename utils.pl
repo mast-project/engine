@@ -1,7 +1,7 @@
-:- module(utils, [id//1, range/4, expect//1, appendv/3]).
+:- module(utils, [id//1, range/4, expect//1, appendv/3, separator//0]).
 :- use_module(library(pio)).
 
-id(Id) --> idchars(L), { atom_codes(Id, L) }.
+id(Id) --> idchars(L), { L \== [], atom_codes(Id, L) }.
 
 idchars([C|T]) -->
     [C],
@@ -27,6 +27,11 @@ range(_, _, _, []).
 
 expect(L) --> L, !.
 expect(L) --> syntax_error(expect(L)).
+
+separator --> [C], { code_type(C, space) }.
+separator --> `,`.
+separator --> `;`.
+separator --> `%`.
 
 appendv(L, H, T) :-
     phrase(appendl(L), H, T).
