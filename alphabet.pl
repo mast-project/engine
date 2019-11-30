@@ -294,7 +294,6 @@ parse_grapheme_pattern(Alph, P) -->
 parse_grapheme_pattern(Alph, P, X) :-
     phrase(parse_grapheme_pattern(Alph, P), X).
 
-pat_simple_grapheme(_, fence) --> `#`.
 pat_simple_grapheme(Alph, contains(C)) -->
     `_`, !, modifier(Alph, C).
 pat_simple_grapheme(Alph, ?(P)) -->
