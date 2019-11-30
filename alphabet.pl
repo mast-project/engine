@@ -10,6 +10,7 @@
                      grapheme_pattern//3,
                      grapheme_patsplit/4,
                      grapheme_patsuffix/4,
+                     grapheme_patsubstr/5,
                      parse_single_grapheme//2,
                      parse_grapheme_pattern//2,
                      parse_grapheme_pattern/3,
@@ -223,6 +224,10 @@ grapheme_patsuffix(_, P, [C | H], T) -->
 
 grapheme_patsuffix(P, X, H, T) :-
     phrase(grapheme_patsuffix(true, P, H, T), X).
+
+grapheme_patsubstr(P, X, H, T, A) :-
+    phrase(grapheme_patsuffix(true, P, H, T), X, A).
+
 
 parse_single_grapheme(Alph, G) -->
     `\\`, !, grapheme(Alph, G).
