@@ -22,7 +22,8 @@
                      grapheme_replace/3,
                      parse_grapheme_subst//2,
                      parse_grapheme_subst/3,
-                     transform_graphemes/4]).
+                     transform_graphemes/4,
+                     enum_transforms/3]).
 :- use_module(library(dcg/basics)).
 :- use_module(library(unicode)).
 :- use_module(library(lists)).
@@ -589,3 +590,8 @@ transform_rec_grapheme(Fence, Rule, SAlph), X -->
 transform_graphemes(Rule, SAlph/DAlph, X, Y) :-
     phrase(transform_graphemes(true, Rule, SAlph/DAlph, Y, []), X),
     maplist(valid_grapheme(DAlph), Y).
+
+enum_transforms(Id, SAlph/DAlph, From = To) :-
+    transform_rule(Id, SAlph, P, DAlph, R, false),
+    enum_graphemes(SAlph, P, From),
+    grapheme_replace(R, From, To).
