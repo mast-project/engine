@@ -1,6 +1,7 @@
 :- module(alphabet, [unicode_cluster//1,
                      unicode_cluster_nfd//1,
                      grapheme//2, graphemes//2,
+                     grapheme_word//2,
                      define_base_letter/2,
                      define_modifier/2,
                      define_text_token/5,
@@ -8,6 +9,7 @@
                      define_transform_rule/5,
                      define_rec_transform_rule/4,
                      grapheme_pattern//3,
+                     grapheme_match/2,
                      grapheme_patsplit/4,
                      grapheme_patsuffix/4,
                      grapheme_patsubstr/5,
@@ -15,7 +17,7 @@
                      parse_grapheme_pattern//2,
                      parse_grapheme_pattern/3,
                      parse_grapheme_simple_pattern//2,
-                     parse_grapheme_simple_pattern/3,                     
+                     parse_grapheme_simple_pattern/3,
                      graphemes_string/3,
                      valid_grapheme/2,
                      enum_graphemes/3,
@@ -111,6 +113,13 @@ graphemes(Alph, [G | T]) -->
 
 graphemes(_, []) --> [].
 
+grapheme_word(Alph, [G | T]) -->
+    \+ separator, !,
+    grapheme(Alph, G),
+    grapheme_word(Alph, T).
+
+grapheme_word(_, []) --> [].
+
 define_base_letter(Alph, A) :-
     nfd_codes(A, NL),
     assertz(base_letter(Alph, NL)).
@@ -197,6 +206,9 @@ grapheme_pattern(Fence, same(N, P), H, T) -->
     repeatn(N1, H0, T0, T).
 
 grapheme_pattern(Fence, P, H) --> grapheme_pattern(Fence, P, H, []).
+
+grapheme_match(P, X) :-
+    phrase(grapheme_pattern(true, P, _), X).
 
 advance(false, _, _, false) :- !.
 advance(true, H, T, false) :- H \= T, !.
