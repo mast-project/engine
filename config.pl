@@ -58,7 +58,7 @@ grammar_statement -->
     { define_structure(S) }.
 
 grammar_statement -->
-    keyword(`paradigm`), !,
+    is_exclusive(Excl), keyword(`paradigm`), !,
     lexeme(id(Label)), check_label(Label),
     altfeatures(IFs),
     { findall(F, expand_label(Label, F), Fs) },
@@ -153,11 +153,11 @@ exceptions([]) --> [].
 paradigm_items(_, _, [], _) --> [].
 paradigm_items(Label, IFS, [F | Fs], Excl) -->
     paradigm_item(Label, IFS, F, Excl),
-    paradigm_items(Label, IFS, Fs).
+    paradigm_items(Label, IFS, Fs, Excl).
 
 paradigm_item(_, _, _, _) --> lexeme(`---`), !.
 paradigm_item(Label, IFs, F, Excl) -->
-    form_patterns(Alph, Pats),
+    form_patterns(Pats),
     { forall((member(IF, IFs),
               member(P, Pats)),
              (put_dict(F, IF, M),
@@ -179,29 +179,29 @@ form_pattern([suppl(P, F)]) -->
     lexeme(grapheme_word(Alph, F)).
 form_pattern([word(P)]) -->
     { default_alphabet(Alph) },
-    lexeme(parse_grapheme_simple_pattern(P)).
+    lexeme(parse_grapheme_simple_pattern(Alph, P)).
 
 form_pattern1([infix(Inf, LB, AltsB, LA, AltsA) | P]) -->
     form_pattern_infix(Inf, LB, AltsB, LA, AltsA), !,
-    (form_pattern1(P); P = []).
-form_pattern1([suffix(Sfx, LB, Alts]) -->
-    form_pattern_suffix(Sfx).
+    (form_pattern1(P); { P = [] }).
+form_pattern1([suffix(Sfx, LB, Alts)]) -->
+    form_pattern_suffix(Sfx, LB, Alts).
 
-form_pattern_prefix(prefix(Pfx, LA, Alts)) -->
+form_pattern_prefix(Pfx, LA, Alts) -->
     { default_alphabet(Alph) },
     parse_grapheme_simple_pattern(Alph, Pfx),
     context_or_alt(Alph, LA, Alts),
     `-`.
 
-form_pattern_suffix(suffix(Sfx, LB, Alts)) -->
+form_pattern_suffix(Sfx, LB, Alts) -->
     { default_alphabet(Alph) }, `-`,
     context_or_alt(Alph, LB, Alts),
     parse_grapheme_simple_pattern(Alph, Sfx).
 
-form_pattern_infix(infix(Infx, LB, AltsB, LA, AltsB)) -->
+form_pattern_infix(Infx, LB, AltsB, LA, AltsA) -->
     { default_alphabet(Alph) }, `-`,
     context_or_alt(Alph, LB, AltsB),
-    parse_grapheme_simple_pattern(Alph, Sfx),
+    parse_grapheme_simple_pattern(Alph, Infx),
     context_or_alt(Alph, LA, AltsA),
     `-`.
 
@@ -210,15 +210,38 @@ context_or_alt(Alph, L, []) -->
 context_or_alt(Alph, null, ['' | Alts]) -->
    `<[`, !, alterations(Alph, Alts), `]>`.
 context_or_alt(Alph, null, Alts) -->
-   `<`, !, alterations(Alts), `>`.
+   `<`, !, alterations(Alph, Alts), `>`.
 context_or_alt(_, null, []) --> [].
 
 alterations(Alph, [A | Alts]) -->
     id(A), { make_alteration(Alph, A) }, `|`, !,
     alterations(Alph, Alts).
 
-alterations(Alph, [A | Alts]) -->
+alterations(Alph, [A]) -->
     id(A), { make_alteration(Alph, A) }.
+
+expand_label(Label, F) :-
+    label(Label, Def), !,
+    expand_label_def(Def, F).
+expand_label(Label, F) :-
+    category(Label, Vs),
+    member(V, Vs),
+    dict_create(F, labels, [Label = V]).
+
+expand_label_def(Label, F) :-
+    atom(Label), !,
+    expand_label(Label, F).
+
+expand_label_def(Fs, F) :-
+    is_list(Fs), !,
+    member(F, Fs).
+
+expand_label_def(fusion(C1, C2, Excl), F) :-
+    category(C1, Vals1),
+    category(C2, Vals2),
+    member(V1, Vals1),
+    (memberchk(V1, Excl) -> V2 = _; member(V2, Vals2)),
+    dict_create(F, labels, [C1 = V1; C2 = V2]).
 
 idlabel(Label) --> id(Label), check_label(Label).
 
@@ -298,6 +321,9 @@ check_cv(C, V) -->
 
 is_default(true) --> keyword(`default`), !.
 is_default(false) --> [].
+
+is_exclusive(true) --> keyword(`exclusive`), !.
+is_exclusive(false) --> [].
 
 keyword(K) --> K, gblanks1.
 

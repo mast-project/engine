@@ -18,7 +18,7 @@ apply_patterns(Form, [H|T], Stem) :-
 
 apply_pattern(Form, word(P), Form) :-
     grapheme_match(P, Form).
-apply_pattern(Form, suppl(P, NewForm), Form) :-
+apply_pattern(Form, suppl(P, NewForm), NewForm) :-
     grapheme_match(P, Form).
 apply_pattern(Form, prefix(P, LA, Alts), Stem) :-
     grapheme_patsplit(P, Form, _, Stem0),
