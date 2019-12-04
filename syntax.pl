@@ -3,23 +3,19 @@
 
 :- chr_constraint constituent/3.
 
-constituent(Pos1, M1, Sub1), constituent(Pos2, M2, Sub2)  <=>
-Pos1 \= Pos2, government(M1, M2, Master, Slave),
-is_complete(Slave, Sub2) |
-constituent(Pos1, [Master], [constituent(Pos2, [Slave], Sub2, true) | Sub1]).
+constituent(Min1-Pos1-Max1, M1, Sub1), constituent(Min2-Pos2-Max2, M2, Sub2) ==>
+                                       Max1 + 1 =:=  Min2, rule(M1, M2),
+is_complete(M2, Sub2) |
+constituent(Min1-Pos1-Max2, M1, [constituent(Min2-Pos2-Max2, M2, Sub2) | Sub1]).
 
-constituent(Pos, M, Sub), constituent(Pos, M, Sub) <=> constituent(Pos, M, Sub).
-
-constituent(Pos, _, _), constituent(Pos, _, _) <=> fail.
-
-government(M1, M2, Master, Slave) :-
-    member(Master, M1),
-    member(Slave, M2),
-    rule(Master, Slave).
+constituent(Min1-Pos1-Max1, M1, Sub1), constituent(Min2-Pos2-Max2, M2, Sub2) ==>
+                                       Max2 + 1 =:=  Min1, rule(M1, M2),
+is_complete(M2, Sub2) |
+constituent(Min2-Pos1-Max1, M1, [constituent(Min2-Pos2-Max2, M2, Sub2) | Sub1]).
 
 is_complete(Master, Sub) :-
     forall(required(Master, Slave),
-           memberchk(constituent(_, [Slave], _, _), Sub)), !.
+           memberchk(constituent(_, Slave, _, _), Sub)), !.
 
 rule(prep, noun).
 rule(verb, noun).

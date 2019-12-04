@@ -52,7 +52,7 @@ grammar_statement -->
     { assertz(label(Name, Def)) }.
 
 grammar_statement -->
-    keyword(`structure`), !,
+    keyword(`word`), !,
     structure_def(S),
     expect_lexeme(`;`),
     { define_structure(S) }.
@@ -273,6 +273,7 @@ uchars([C | T]) --> uchar(C), !, uchars0(T).
 uchars0(L) --> uchars(L), !.
 uchars0([]) --> gblanks.
 
+uchar(C0) --> `<C-, [C], { code_type(C, lower), C0 is C - 60 }, `>`, !.
 uchar(C) --> `\\`, !, [C].
 uchar(C) --> `<U+`, !, xinteger(C), `>`.
 uchar(C) --> \+ separator, [C].

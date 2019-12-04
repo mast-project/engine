@@ -169,6 +169,11 @@ grapheme_pattern(_, oneof(L), [G | T], T) -->
     [G],
     { memberchk(G, L) }.
 
+grapheme_pattern(_, oneof_contains(L, M), [G | T], T) -->
+    [grapheme(B, ML)],
+    { selectchk(M, ML, ML0),
+      memberchk(grapheme(B, ML0), L) }.
+
 grapheme_pattern(Fence, (P1, P2), H, T0) -->
     grapheme_pattern(Fence, P1, H, T),
     {advance(Fence, H, T, Fence0)},
@@ -245,6 +250,17 @@ grapheme_patsubstr(P, X, H, T, A) :-
 parse_single_grapheme(Alph, G) -->
     `\\`, !, grapheme(Alph, G).
 
+parse_single_grapheme(Alph, grapheme([C0], [])) -->
+    `<C-`, [C],
+    { code_type(C, lower),
+      C0 is C - 60,
+      base_letter(Alph, [C0])},
+    `>`, !.
+
+parse_single_grapheme(Alph, grapheme([C], [])) -->
+    `<U+`, xinteger(C), `>`,
+    { base_letter(Alph, [C])}, !.
+
 parse_single_grapheme(Alph, G) -->
     `'`, grapheme(Alph, G), `'`, !.
 
@@ -263,6 +279,8 @@ pat_atomic_grapheme(Alph, ?(P)) -->
     `[`, parse_grapheme_pattern(Alph, P), `]`, !.
 pat_atomic_grapheme(Alph, X) -->
     `{`, id(Id), `}`, { class_or_token(Alph, Id, X) }, !.
+pat_atomic_grapheme(Alph, oneof_contains(L, M)) -->
+    `{`, id(Id), modifier(M), `}`, { letter_class(Alph, Id, L) }, !.
 pat_atomic_grapheme(Alph, exact(G)) -->
     parse_single_grapheme(Alph, G).
 
@@ -383,6 +401,10 @@ enum_graphemes(_, token(N)) -->
 enum_graphemes(_, oneof(L)) -->
     { member(X, L) },
     [X].
+enum_graphemes(_, oneof_contains(L, M)) -->
+    { member(grapheme(B, ML), L) },
+    [grapheme(B, [M | ML])].
+
 enum_graphemes(Alph, (X, Y)) -->
     enum_graphemes(Alph, X),
     enum_graphemes(Alph, Y).
@@ -456,6 +478,9 @@ grapheme_replace(add(R, M), S, T) -->
 grapheme_replace(remove(R, M), S, T) -->
     grapheme_replace(R, S, [remove(M) | T]).
 
+grapheme_replace(chop(R), S, T) -->
+    grapheme_replace(R, S, [chop | T]).
+
 grapheme_replace(apply(Id, Alphs, R), S, T) -->
     grapheme_replace(R, S, [apply(Id, Alphs) | T]).
 
@@ -478,6 +503,9 @@ apply_transform1(upper, X, Y) :-
 
 apply_transform1(lower, X, Y) :-
     tolower_grapheme(X, Y).
+
+apply_transform1(chop, grapheme([_ | B], ML), grapheme(B, ML)) :- !.
+apply_transform1(chop, X, X).
 
 apply_transform1(add(M), grapheme(B, ML), grapheme(B, [M | ML])) :-
     \+ memberchk(M, ML), !.
