@@ -1,17 +1,28 @@
-:- module(syntax, [constituent/3]).
-:- use_module(library(chr)).
+:- module(syntax, [reduce_syntax/2]).
 
-:- chr_constraint constituent/3.
+select_two(H1, H2, [H1, H2 | T], T) --> [].
+select_two(H1, H2, [H | T], T0) --> [H],
+    select_two(H1, H2, T, T0).
 
-constituent(Min1-Pos1-Max1, M1, Sub1), constituent(Min2-Pos2-Max2, M2, Sub2) ==>
-                                       Max1 + 1 =:=  Min2, rule(M1, M2),
-is_complete(M2, Sub2) |
-constituent(Min1-Pos1-Max2, M1, [constituent(Min2-Pos2-Max2, M2, Sub2) | Sub1]).
+select_two(H1, H2, Src, Pfx, Sfx) :-
+    phrase(select_two(H1, H2, Src, Sfx), Pfx).
 
-constituent(Min1-Pos1-Max1, M1, Sub1), constituent(Min2-Pos2-Max2, M2, Sub2) ==>
-                                       Max2 + 1 =:=  Min1, rule(M1, M2),
-is_complete(M2, Sub2) |
-constituent(Min2-Pos1-Max1, M1, [constituent(Min2-Pos2-Max2, M2, Sub2) | Sub1]).
+reduce_syntax([X], [X]) :- !.
+reduce_syntax(Src, Dst) :-
+    select_two(X, Y, Src, Pfx, Sfx),
+    reduce(X, Y, Z),
+    append(Pfx, [Z | Sfx], Src0),
+    reduce_syntax(Src0, Dst).
+
+reduce(X, Y, Z) :-
+    govern(X, Y, Z).
+reduce(X, Y, Z) :-
+    govern(Y, X, Z).
+
+govern(constituent(Pos1, M1, Sub1), constituent(Pos2, M2, Sub2),
+       constituent(Pos1, M1, [constituent(Pos2, M2, Sub2) | Sub1])) :-
+    rule(M1, M2),
+    is_complete(M2, Sub2).
 
 is_complete(Master, Sub) :-
     forall(required(Master, Slave),

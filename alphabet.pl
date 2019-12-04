@@ -169,7 +169,7 @@ grapheme_pattern(_, oneof(L), [G | T], T) -->
     [G],
     { memberchk(G, L) }.
 
-grapheme_pattern(_, oneof_contains(L, M), [G | T], T) -->
+grapheme_pattern(_, oneof_contains(L, M), [grapheme(B, ML) | T], T) -->
     [grapheme(B, ML)],
     { selectchk(M, ML, ML0),
       memberchk(grapheme(B, ML0), L) }.
@@ -280,7 +280,7 @@ pat_atomic_grapheme(Alph, ?(P)) -->
 pat_atomic_grapheme(Alph, X) -->
     `{`, id(Id), `}`, { class_or_token(Alph, Id, X) }, !.
 pat_atomic_grapheme(Alph, oneof_contains(L, M)) -->
-    `{`, id(Id), modifier(M), `}`, { letter_class(Alph, Id, L) }, !.
+    `{`, id(Id), modifier(Alph, M), `}`, { letter_class(Alph, Id, L) }, !.
 pat_atomic_grapheme(Alph, exact(G)) -->
     parse_single_grapheme(Alph, G).
 
@@ -332,7 +332,7 @@ pat_simple_grapheme(Alph, ?(P)) -->
 pat_simple_grapheme(Alph, X) -->
     `{`, id(Id), `}`, { class_or_token(Alph, Id, X) }, !.
 pat_simple_grapheme(Alph, exact(G)) -->
-    parse_single_grapheme(Alph, G).
+    parse_single_grapheme(Alph, G), !.
 
 pat_simple_repeat(Alph, *(P)) -->
     pat_simple_grapheme(Alph, P), `*`, !.
@@ -548,7 +548,7 @@ parse_grapheme_subst(Alphs, (P1, P2)) -->
     parse_subst_repeat(Alphs, P1),
     parse_grapheme_subst(Alphs, P2), !.
 parse_grapheme_subst(Alphs, P) -->
-    parse_subst_repeat(Alphs, P).
+    parse_subst_repeat(Alphs, P), !.
 
 parse_subst_repeat(Alphs, repeat(N, P)) -->
     parse_subst_elem(Alphs, P),

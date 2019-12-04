@@ -87,7 +87,7 @@ alphabet_def(Alph) -->
     keyword(`token`), lexeme(id(Name)), !,
     uchars(Prefix),
     list_of_classes(Classes),
-    uchars(Suffix),
+    uchars0(Suffix),
     { define_text_token(Alph, Name, Prefix, Classes, Suffix) }.
 
 alphabet_def(_) --> syntax_error(unknown_alphabet_def).
@@ -273,7 +273,7 @@ uchars([C | T]) --> uchar(C), !, uchars0(T).
 uchars0(L) --> uchars(L), !.
 uchars0([]) --> gblanks.
 
-uchar(C0) --> `<C-, [C], { code_type(C, lower), C0 is C - 60 }, `>`, !.
+uchar(C0) --> `<C-`, [C], { code_type(C, lower), C0 is C - 60 }, `>`, !.
 uchar(C) --> `\\`, !, [C].
 uchar(C) --> `<U+`, !, xinteger(C), `>`.
 uchar(C) --> \+ separator, [C].
