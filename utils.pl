@@ -28,7 +28,9 @@ range(_, _, _, []).
 expect(L) --> L, !.
 expect(L) --> syntax_error(expect(L)).
 
-separator --> [C], { code_type(C, space) }.
+separator --> [C],
+              { code_type(C, space);
+                code_type(_, paren(C)) }.
 separator --> `,`.
 separator --> `;`.
 separator --> `%`.

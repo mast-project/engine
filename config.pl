@@ -60,9 +60,9 @@ grammar_statement -->
 grammar_statement -->
     is_exclusive(Excl), keyword(`paradigm`), !,
     lexeme(id(Label)), check_label(Label),
-    altfeatures(IFs),
-    { findall(F, expand_label(Label, F), Fs) },
-    paradigm_items(Label, IFs, Fs, Excl),
+    labeldef(Add),
+    { findall(F, expand_label_def(Label * Add, F), Fs) },
+    paradigm_items(_, Label, Fs, Excl),
     expect_lexeme(`;`).
 
 grammar_statement --> syntax_error(unknown_statement).
@@ -135,43 +135,65 @@ struct_suffixes(T, S) -->
 
 struct_suffixes(T, T) --> gblanks.
 
-labeldef(Fs) --> altfeatures(Fs), !.
-labeldef(fusion(C1, C2, Exc)) -->
-    lexeme(id(C1)),
-    lexeme(`*`), !,
-    lexeme(id(C2)),
-    exceptions(Exc),
-    check_category(C1),
-    check_category(C2),
-    check_values(C1, Exc).
+labeldef((L1; L2)) -->
+    labeldef_alt(L1), lexeme(`|`), !,
+    labeldef(L2).
 
-labeldef(Label) --> lexeme(id(Label)), !.
+labeldef(L) -->
+    labeldef_alt(L).
 
-exceptions(Exc) --> lexeme(`\\`), !, ids(Exc).
-exceptions([]) --> [].
+labeldef_alt(L1 * L2) -->
+    labeldef_prod(L1), lexeme(`*`), !,
+    labeldef_alt(L2).
+
+labeldef_alt(L) -->
+    labeldef_prod(L).
+
+labeldef_prod(L1 - L2) -->
+    labeldef_atomic(L1), lexeme(`\\`), !,
+    labeldef_prod(L2).
+
+labeldef_prod(L) -->
+    labeldef_atomic(L).
+
+labeldef_atomic(Id) -->
+    lexeme(id(Id)), !,
+    check_label(Id).
+
+labeldef_atomic(F) -->
+    features(F), !.
+
+labeldef_atom(X) --> `(`, labeldef(X), `)`.
 
 paradigm_items(_, _, [], _) --> [].
-paradigm_items(Label, IFS, [F | Fs], Excl) -->
-    paradigm_item(Label, IFS, F, Excl),
-    paradigm_items(Label, IFS, Fs, Excl).
+paradigm_items(PrevPats, Label, [F | Fs], Excl) -->
+    paradigm_item(PrevPats, Label, F, Excl, Pats),
+    paradigm_items(Pats, Label, Fs, Excl).
 
-paradigm_item(_, _, _, _) --> lexeme(`---`), !.
-paradigm_item(Label, IFs, F, Excl) -->
+paradigm_item(_, _, _, _, _) --> lexeme(`---`), !.
+paradigm_item(PrevPats, Label, F, Excl, PrevPats) -->
+    lexeme(`<<<`),
+    { nonvar(PrevPats),
+      forall(member(P, PrevPats),
+             define_rule(Label, P, F, Excl)) }.
+
+paradigm_item(_, Label, F, Excl, Pats) -->
     form_patterns(Pats),
-    { forall((member(IF, IFs),
-              member(P, Pats)),
-             (put_dict(F, IF, M),
-              define_rule(Label, P, M, Excl))) }.
+    { forall(member(P, Pats),
+             define_rule(Label, P, F, Excl)) }.
 
 form_patterns([P | Ps]) -->
     form_pattern(P), lexeme(`,`), !,
     form_patterns(Ps).
-form_patterns([P]) --> form_pattern(P).
+form_patterns([P]) --> form_pattern(P), !.
 
 form_pattern([prefix(Pfx, LA, Alts) | P]) -->
     form_pattern_prefix(Pfx, LA, Alts), !,
-    form_pattern1(P).
-form_pattern(P) --> form_pattern1(P), !.
+    form_pattern1(P),
+    gblanks.
+form_pattern(P) -->
+    form_pattern1(P),
+    gblanks, !.
 form_pattern([suppl(P, F)]) -->
     { default_alphabet(Alph) },
     lexeme(parse_grapheme_simple_pattern(Alph, P)),
@@ -179,7 +201,7 @@ form_pattern([suppl(P, F)]) -->
     lexeme(grapheme_word(Alph, F)).
 form_pattern([word(P)]) -->
     { default_alphabet(Alph) },
-    lexeme(parse_grapheme_simple_pattern(Alph, P)).
+    lexeme(parse_grapheme_simple_pattern(Alph, P)), !.
 
 form_pattern1([infix(Inf, LB, AltsB, LA, AltsA) | P]) -->
     form_pattern_infix(Inf, LB, AltsB, LA, AltsA), !,
@@ -205,13 +227,13 @@ form_pattern_infix(Infx, LB, AltsB, LA, AltsA) -->
     context_or_alt(Alph, LA, AltsA),
     `-`.
 
-context_or_alt(Alph, L, []) -->
+context_or_alt(Alph, L, ['']) -->
    `(`, !, parse_grapheme_simple_pattern(Alph, L), `)`.
 context_or_alt(Alph, null, ['' | Alts]) -->
    `<[`, !, alterations(Alph, Alts), `]>`.
 context_or_alt(Alph, null, Alts) -->
    `<`, !, alterations(Alph, Alts), `>`.
-context_or_alt(_, null, []) --> [].
+context_or_alt(_, null, ['']) --> [].
 
 alterations(Alph, [A | Alts]) -->
     id(A), { make_alteration(Alph, A) }, `|`, !,
@@ -226,34 +248,34 @@ expand_label(Label, F) :-
 expand_label(Label, F) :-
     category(Label, Vs),
     member(V, Vs),
-    dict_create(F, labels, [Label = V]).
+    dict_create(F, features, [Label = V]).
 
 expand_label_def(Label, F) :-
     atom(Label), !,
     expand_label(Label, F).
 
-expand_label_def(Fs, F) :-
-    is_list(Fs), !,
-    member(F, Fs).
+expand_label_def(F, F) :-
+    is_dict(F, features), !.
 
-expand_label_def(fusion(C1, C2, Excl), F) :-
-    category(C1, Vals1),
-    category(C2, Vals2),
-    member(V1, Vals1),
-    (memberchk(V1, Excl) -> V2 = _; member(V2, Vals2)),
-    dict_create(F, labels, [C1 = V1; C2 = V2]).
+expand_label_def(L1 - L2, F) :-
+    expand_label_def(L1, F),
+    \+ (expand_label_def(L2, NF), NF :< F).
+
+expand_label_def((L1; L2), F) :-
+    expand_label_def(L1, F);
+    expand_label_def(L2, F).
+
+expand_label_def(L1 * L2, F) :-
+    expand_label_def(L1, F1),
+    expand_label_def(L2, F2),
+    F1 >:< F2,
+    put_dict(F1, F2, F).
 
 idlabel(Label) --> id(Label), check_label(Label).
 
 check_label(Label) --> { label(Label, _)}, !.
 check_label(Label) --> { category(Label, _)}, !.
 check_label(Label) --> syntax_error(undefined_label(Label)).
-
-check_category(Label) --> { category(Label, _)}, !.
-check_category(Label) --> syntax_error(undefined_category(Label)).
-
-check_values(Cat, L) --> { category(Cat, All), subset(L, All) }, !.
-check_values(Cat, L) --> syntax_error(invalid_values(Cat, L)).
 
 letters(Alph) --> letter(Alph), !, letters(Alph).
 letters(_) --> [].
@@ -295,11 +317,6 @@ ids([H|T]) -->
     ids(T).
 ids([]) --> [].
 
-altfeatures([H|T]) -->
-    features(H), lexeme(`|`), !,
-    altfeatures(T).
-altfeatures([H]) --> features(H).
-
 features(F) -->
     lexeme(`{`),
     catvalues(KV),
@@ -308,11 +325,15 @@ features(F) -->
 
 catvalues([C = V | T]) -->
     lexeme(id(C)), lexeme(`:`),
-    lexeme(id(V)),
-    check_cv(C, V), !,
+    catval(C, V), !,
     catvalues(T).
 
 catvalues([]) --> [].
+
+catval(_, _V) --> lexeme(`?`), !.
+catval(C, V) -->
+    lexeme(id(V)),
+    check_cv(C, V).
 
 check_cv(C, V) -->
     { category(C, VL),
