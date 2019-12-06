@@ -25,6 +25,7 @@
                      parse_grapheme_subst//2,
                      parse_grapheme_subst/3,
                      transform_graphemes/4,
+                     transform_target/3,
                      enum_transforms/3]).
 :- use_module(library(dcg/basics)).
 :- use_module(library(unicode)).
@@ -635,3 +636,6 @@ enum_transforms(Id, SAlph/DAlph, From = To) :-
     transform_rule(Id, SAlph, P, DAlph, R, false),
     enum_graphemes(SAlph, P, From),
     grapheme_replace(R, From, To).
+
+transform_target(Id, SAlph, DAlph) :-
+    transform_rule(Id, SAlph, _, DAlph, _, false).

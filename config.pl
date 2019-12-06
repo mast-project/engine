@@ -3,9 +3,12 @@
 :- use_module(library(dcg/basics)).
 :- use_module(alphabet).
 :- use_module(morpho).
+:- use_module(pipeline).
 :- use_module(utils).
 
 :- dynamic default_alphabet/1, category/2, label/2.
+
+:- multifile parse_pipeline_step//1.
 
 load_grammar_file(File) :-
     phrase_from_file(grammar_file, File).
@@ -64,6 +67,12 @@ grammar_statement -->
     { findall(F, expand_label_def(Label * Add, F), Fs) },
     paradigm_items(_, Label, Fs, Excl),
     expect_lexeme(`;`).
+
+grammar_statement -->
+    keyword(`pipeline`), !,
+    lexeme(id(Name)), lexeme(`:`), pipeline_type(Type),
+    parse_pipeline_steps(Steps), expect_lexeme(`;`),
+    { define_pipeline(Name, Type, Steps) }.
 
 grammar_statement --> syntax_error(unknown_statement).
 
@@ -241,6 +250,30 @@ alterations(Alph, [A | Alts]) -->
 
 alterations(Alph, [A]) -->
     id(A), { make_alteration(Alph, A) }.
+
+parse_pipeline_steps([H | T]) -->
+    lexeme(`->`), parse_pipeline_step(H), !,
+    parse_pipeline_steps(T).
+
+parse_pipeline_steps([]) --> [].
+
+parse_pipeline_step(read) --> keyword(`read`), !.
+parse_pipeline_step(join) --> keyword(`join`), !.
+parse_pipeline_step(dump) --> keyword(`dump`), !.
+parse_pipeline_step(graphemes(Alph)) -->
+    keyword(`graphemes`),
+    lexeme(id(Alph)).
+parse_pipeline_step(map(Step)) -->
+    parse_pipeline_step(Step), !.
+parse_pipeline_step(call(Id)) -->
+    keyword(`call`),
+    lexeme(id(Alph)), !.
+parse_pipeline_step(transform(Id)) -->
+    keyword(`transform`),
+    lexeme(id(Alph)), !.
+
+pipeline_type([]) --> keyword(`void`), !.
+pipeline_type(Type) --> lexeme(id(Type)).
 
 expand_label(Label, F) :-
     label(Label, Def), !,
