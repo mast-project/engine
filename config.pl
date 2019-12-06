@@ -267,10 +267,10 @@ parse_pipeline_step(map(Step)) -->
     parse_pipeline_step(Step), !.
 parse_pipeline_step(call(Id)) -->
     keyword(`call`),
-    lexeme(id(Alph)), !.
+    lexeme(id(Id)), !.
 parse_pipeline_step(transform(Id)) -->
     keyword(`transform`),
-    lexeme(id(Alph)), !.
+    lexeme(id(Id)), !.
 
 pipeline_type([]) --> keyword(`void`), !.
 pipeline_type(Type) --> lexeme(id(Type)).

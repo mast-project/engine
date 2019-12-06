@@ -1,5 +1,5 @@
 :- module(pipeline, [define_pipeline/3, run_pipeline/4]).
-:- use_module(libary(error)).
+:- use_module(library(error)).
 :- use_module(library(readutil)).
 :- use_module(library(apply)).
 :- use_module(alphabet).
@@ -16,9 +16,8 @@ define_pipeline(Name, InType, Steps) :-
     forall(pipeline_typecheck(Steps, InType, OutType, TypedSteps),
            assertz(pipeline(Name, (InType -> OutType), TypedSteps))), !.
 
-define_pipeline(Name, InType, Steps) :-
-    domain_error(pipeline, Steps).
-
+define_pipeline(Name, _, _) :-
+    domain_error(pipeline, Name).
 
 run_pipeline(Name, InType -> OutType, Input, Output) :-
     pipeline(Name, InType -> OutType, Steps),
