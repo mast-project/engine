@@ -13,7 +13,9 @@ pipeline_typecheck([H | T], InType, OutType, [H : (InType -> OutType0) | TT]) :-
     pipeline_typecheck(T, OutType0, OutType, TT).
 
 define_pipeline(Name, InType, Steps) :-
-    forall(pipeline_typecheck(Steps, InType, OutType, TypedSteps),
+    setof(OutType:TypedSteps,
+          pipeline_typecheck(Steps, InType, OutType, TypedSteps), L),
+    forall(member(OutType:TypedSteps, L),
            assertz(pipeline(Name, (InType -> OutType), TypedSteps))), !.
 
 define_pipeline(Name, _, _) :-
@@ -31,6 +33,7 @@ run_pipeline_steps([H : Types | T], Input, Output) :-
 pipeline_type(read, filename, [uchars]).
 pipeline_type(join, [uchars], [uchars]).
 pipeline_type(join, [[X]], [X]).
+pipeline_type(sample(_), [X], [X]).
 pipeline_type(graphemes(Alph), uchars, [grapheme(Alph)]).
 pipeline_type(map(Step), [InType], [OutType]) :-
     pipeline_type(Step, InType, OutType).
@@ -42,6 +45,7 @@ pipeline_type(transform(Id), [grapheme(SrcAlph)], [grapheme(DstAlph)]) :-
     transform_target(Id, SrcAlph, DstAlph).
 
 pipeline_type(dump, X, X).
+pipeline_type(dump, _, []).
 
 pipeline_step(read, (filename -> [uchars]), FileName, Lines) :-
     setup_call_cleanup(open(FileName, read, Stream),
@@ -51,24 +55,39 @@ pipeline_step(read, (filename -> [uchars]), FileName, Lines) :-
 pipeline_step(join, _, X, Y) :-
     append(X, Y).
 
+pipeline_step(sample(N), _, X, Y) :-
+    append(Y, _, X),
+    length(Y, N).
+
 pipeline_step(graphemes(Alph), _, Chars, Graphemes) :-
-    phrase(graphemes(Alph, Graphemes), Chars).
+    phrase(graphemes(Alph, Graphemes), Chars), !.
+
+pipeline_step(graphemes(_), _, Chars, _) :-
+    domain_error(graphemes, Chars).
 
 pipeline_step(map(Step),  ([InType] -> [OutType]), Input, Output) :-
-    maplist(pipeline_step(Step, (InType -> OutType), Input, Output)).
+    maplist(pipeline_step(Step, (InType -> OutType)), Input, Output).
 
 pipeline_step(call(Id), Types, Input, Output) :-
     run_pipeline(Id, Types, Input, Output).
 
 pipeline_step(transform(Id), ([grapheme(SrcAlph)] -> [grapheme(DstAlph)]),
               Input, Output) :-
-    transform_graphemes(Id, SrcAlph/DstAlph, Input, Output).
+    transform_graphemes(Id, SrcAlph/DstAlph, Input, Output), !.
+
+pipeline_step(transform(Id), _, Input, _) :-
+    domain_error(transform(Id), Input).
+
+pipeline_step(dump, ([[X]] -> _), Input, Input) :-
+    maplist(pipeline_step(dump, ([X] -> _)), Input, _).
 
 pipeline_step(dump, ([grapheme(Alph)] -> _), Input, Input) :-
-    graphemes_string(Alph, Input, L),
-    maplist(put_code, L).
+    graphemes_string(Alph, Input, A),
+    write(A).
 
 read_lines(Stream, [H | T]) :-
     read_line_to_codes(Stream, H, []),
     H \= [], !,
     read_lines(Stream, T).
+
+read_lines(_, []).

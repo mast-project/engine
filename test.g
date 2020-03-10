@@ -1,10 +1,14 @@
 % comment
 
+alphabet digits
+         letters 0 1 2 3 4 5 6 7 8 9
+;
+
 alphabet test % comment
          letters a b ą sz, % comment
          modifiers <U+0301> ’,
          class V a ą,
-         token NUM # Nd \;
+         token NUM # digits \;
 ;
 
 alphabet test2

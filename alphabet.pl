@@ -35,11 +35,15 @@
 :- use_module(utils).
 
 :- dynamic base_letter/2, modifier/2, text_token/5,
-           letter_class/3, transform_rule/6.
+           letter_class/3, transform_rule/6, nfd_cache/2.
+
+nfd_codes(X, L) :-
+    nfd_cache(X, L), !.
 
 nfd_codes(X, L) :-
     unicode_nfd(X, N),
-    atom_codes(N, L).
+    atom_codes(N, L),
+    assertz(nfd_cache(X, L)).
 
 unicode_cluster([C | T]) -->
     [C],
@@ -81,18 +85,10 @@ grapheme(Alph, grapheme(B, M)) -->
     \+ unicode_extend_char(_).
 
 next_token(Alph, Name, Contents) -->
-    { text_token(Alph, Name, Pfx, Classes, Sfx) },
+    { text_token(Alph, Name, Pfx, SubAlph, Sfx) },
     sequence(Pfx),
-    of_classes(Classes, Contents), { Contents \= `` },
+    graphemes(SubAlph, Contents),
     sequence(Sfx).
-
-of_classes(Classes, [C | T]) -->
-    [C],
-    { member(Cls, Classes),
-      unicode_property(C, category(Cls)) }, !,
-    of_classes(Classes, T).
-
-of_classes(_, []) --> [].
 
 base_grapheme(Alph, B) -->
     { base_letter(Alph, B) },
@@ -129,10 +125,10 @@ define_modifier(Alph, M) :-
     nfd_codes(M, NL),
     assertz(modifier(Alph, NL)).
 
-define_text_token(Alph, Id, Pfx, Classes, Sfx) :-
+define_text_token(Alph, Id, Pfx, SubAlph, Sfx) :-
     nfd_codes(Pfx, PfxL),
     nfd_codes(Sfx, SfxL),
-    assertz(text_token(Alph, Id, PfxL, Classes, SfxL)).
+    assertz(text_token(Alph, Id, PfxL, SubAlph, SfxL)).
 
 define_letter_class(Alph, Id, Alts) :-
     assertz(letter_class(Alph, Id, Alts)).
@@ -148,6 +144,9 @@ grapheme_pattern(true, fence, X, X) --> [].
 
 grapheme_pattern(_, null, X, X) --> [].
 
+grapheme_pattern(_, any, [G | T], T) -->
+    [G].
+
 grapheme_pattern(_, exact(G), [G | T], T) -->
     [G].
 
@@ -159,21 +158,18 @@ grapheme_pattern(_, approx(token(N, L)), [token(N, L0) | T], T) -->
     [token(N, L0)],
     { append(L, _, L0) }.
 
-grapheme_pattern(_, contains(C), [grapheme(B, M) | T], T) -->
-    [grapheme(B, M)],
-    { memberchk(C, M) }.
-
 grapheme_pattern(_, token(Name), [token(Name, Contents) | T], T) -->
     [token(Name, Contents)].
 
-grapheme_pattern(_, oneof(L), [G | T], T) -->
-    [G],
-    { memberchk(G, L) }.
+grapheme_pattern(Fence, oneof(Pats), H, T) -->
+    { member(Pat, Pats) },
+    grapheme_pattern(Fence, Pat, H, T).
 
-grapheme_pattern(_, oneof_contains(L, M), [grapheme(B, ML) | T], T) -->
+grapheme_pattern(Fence, contains(M, SubP), [grapheme(B, ML) | T], T) -->
     [grapheme(B, ML)],
     { selectchk(M, ML, ML0),
-      memberchk(grapheme(B, ML0), L) }.
+      phrase(grapheme_pattern(Fence, SubP, _, _),
+             [grapheme(B, ML0)]) }.
 
 grapheme_pattern(Fence, (P1, P2), H, T0) -->
     grapheme_pattern(Fence, P1, H, T),
@@ -254,7 +250,7 @@ parse_single_grapheme(Alph, G) -->
 parse_single_grapheme(Alph, grapheme([C0], [])) -->
     `<C-`, [C],
     { code_type(C, lower),
-      C0 is C - 60,
+      C0 is C - 96,
       base_letter(Alph, [C0])},
     `>`, !.
 
@@ -272,7 +268,7 @@ parse_single_grapheme(Alph, G) -->
 pat_atomic_grapheme(_, fence) --> `#`.
 pat_atomic_grapheme(Alph, approx(B, M)) -->
     `~`, !, parse_single_grapheme(Alph, grapheme(B, M)).
-pat_atomic_grapheme(Alph, contains(C)) -->
+pat_atomic_grapheme(Alph, contains(C, any)) -->
     `_`, !, modifier(Alph, C).
 pat_atomic_grapheme(Alph, P) -->
     `(`, parse_grapheme_pattern(Alph, P), `)`, !.
@@ -280,16 +276,17 @@ pat_atomic_grapheme(Alph, ?(P)) -->
     `[`, parse_grapheme_pattern(Alph, P), `]`, !.
 pat_atomic_grapheme(Alph, X) -->
     `{`, id(Id), `}`, { class_or_token(Alph, Id, X) }, !.
-pat_atomic_grapheme(Alph, oneof_contains(L, M)) -->
-    `{`, id(Id), modifier(Alph, M), `}`, { letter_class(Alph, Id, L) }, !.
+pat_atomic_grapheme(Alph, contains(M, oneof(Pats))) -->
+    `{`, id(Id), modifier(Alph, M), `}`,
+    { letter_class(Alph, Id, Pats) }, !.
 pat_atomic_grapheme(Alph, exact(G)) -->
     parse_single_grapheme(Alph, G).
 
 class_or_token(Alph, Id, token(Id)) :-
     text_token(Alph, Id, _, _, _), !.
 
-class_or_token(Alph, Id, oneof(L)) :-
-    letter_class(Alph, Id, L).
+class_or_token(Alph, Id, oneof(Pats)) :-
+    letter_class(Alph, Id, Pats).
 
 pat_repeat(Alph, *(P)) -->
     pat_atomic_grapheme(Alph, P), `*`, !.
@@ -326,12 +323,15 @@ parse_grapheme_pattern(Alph, P) -->
 parse_grapheme_pattern(Alph, P, X) :-
     phrase(parse_grapheme_pattern(Alph, P), X).
 
-pat_simple_grapheme(Alph, contains(C)) -->
+pat_simple_grapheme(Alph, contains(C, any)) -->
     `_`, !, modifier(Alph, C).
 pat_simple_grapheme(Alph, ?(P)) -->
     `[`, parse_grapheme_simple_pattern(Alph, P), `]`, !.
 pat_simple_grapheme(Alph, X) -->
     `{`, id(Id), `}`, { class_or_token(Alph, Id, X) }, !.
+pat_simple_grapheme(Alph, contains(M, oneof(Pats))) -->
+    `{`, id(Id), modifier(Alph, M), `}`,
+    { letter_class(Alph, Id, Pats) }, !.
 pat_simple_grapheme(Alph, exact(G)) -->
     parse_single_grapheme(Alph, G), !.
 
@@ -368,8 +368,8 @@ grapheme_string(_, grapheme(B, M)) -->
     modifiers_string(M).
 
 grapheme_string(Alph, token(Name, Content)) -->
-    { text_token(Alph, Name, Pfx, _, Sfx) },
-    Pfx, Content, Sfx.
+    { text_token(Alph, Name, Pfx, SubAlph, Sfx) },
+    Pfx, graphemes_string(SubAlph, Content), Sfx.
 
 modifiers_string([M | T]) -->
     M,
@@ -381,30 +381,31 @@ valid_grapheme(Alph, grapheme(B, M)) :-
     base_letter(Alph, B),
     maplist(modifier(Alph), M).
 valid_grapheme(Alph, token(Name, Contents)) :-
-    text_token(Alph, Name, _, Classes, _),
-    phrase(of_classes(Classes, _), Contents).
+    text_token(Alph, Name, _, SubAlph, _),
+    maplist(valid_grapheme(SubAlph), Contents).
 
 enum_graphemes(_, border) -->
     { domain_error(lookahead, border) }.
 enum_graphemes(_, null) --> [].
 enum_graphemes(_, exact(X)) --> [X].
+enum_graphemes(Alph, any) -->
+    { base_letter(Alph, B),
+      gen_modifiers(Alph, [], ML) },
+    [grapheme(B, ML)].
 enum_graphemes(Alph, approx(grapheme(B, ML))) -->
     { gen_modifiers(Alph, ML, ML0) },
     [grapheme(B, ML0)].
 enum_graphemes(_, approx(token(N, C))) -->
     { domain_error(infinite_pattern, approx(token(N, C))) }.
-enum_graphemes(Alph, contains(M)) -->
-    { base_letter(Alph, B),
-      gen_modifiers(Alph, [M], ML) },
+enum_graphemes(Alph, contains(M, P)) -->
+    { phrase(enum_graphemes(Alph, P), [grapheme(B, ML)]),
+      memberchk(M, ML) },
     [grapheme(B, ML)].
 enum_graphemes(_, token(N)) -->
     { domain_error(infinite_pattern, token(N)) }.
-enum_graphemes(_, oneof(L)) -->
-    { member(X, L) },
-    [X].
-enum_graphemes(_, oneof_contains(L, M)) -->
-    { member(grapheme(B, ML), L) },
-    [grapheme(B, [M | ML])].
+enum_graphemes(Alph, oneof(Pats)) -->
+    { member(P, Pats) },
+    enum_graphemes(Alph, P).
 
 enum_graphemes(Alph, (X, Y)) -->
     enum_graphemes(Alph, X),
@@ -482,6 +483,9 @@ grapheme_replace(remove(R, M), S, T) -->
 grapheme_replace(chop(R), S, T) -->
     grapheme_replace(R, S, [chop | T]).
 
+grapheme_replace(base(R), S, T) -->
+    grapheme_replace(R, S, [base | T]).
+
 grapheme_replace(apply(Id, Alphs, R), S, T) -->
     grapheme_replace(R, S, [apply(Id, Alphs) | T]).
 
@@ -508,6 +512,9 @@ apply_transform1(lower, X, Y) :-
 apply_transform1(chop, grapheme([_ | B], ML), grapheme(B, ML)) :- !.
 apply_transform1(chop, X, X).
 
+apply_transform1(base, grapheme(B, _), grapheme(B, [])) :- !.
+apply_transform1(base, X, X).
+
 apply_transform1(add(M), grapheme(B, ML), grapheme(B, [M | ML])) :-
     \+ memberchk(M, ML), !.
 apply_transform1(add(_), X, X).
@@ -523,13 +530,13 @@ toupper_grapheme(grapheme(B, M), grapheme(BU, MU)) :-
     toupperl(B, BU),
     maplist(toupperl, M, MU).
 toupper_grapheme(token(Name, C), token(Name, CU)) :-
-    toupperl(C, CU).
+    maplist(toupper_grapheme, C, CU).
 
-tolower_grapheme(grapheme(B, M), grapheme(BU, MU)) :-
-    tolowerl(B, BU),
-    maplist(tolowerl, M, MU).
-tolower_grapheme(token(Name, C), token(Name, CU)) :-
-    tolowerl(C, CU).
+tolower_grapheme(grapheme(B, M), grapheme(BL, ML)) :-
+    tolowerl(B, BL),
+    maplist(tolowerl, M, ML).
+tolower_grapheme(token(Name, C), token(Name, CL)) :-
+    maplist(tolower_grapheme, C, CL). 
 
 toupperl(L, LU) :- maplist(toupperc, L, LU).
 
@@ -601,6 +608,7 @@ parse_subst_transform(_/DAlph, P, add(P, M)) -->
 
 subst_func(upper, _, P, upper(P)) :- !.
 subst_func(lower, _, P, lower(P)) :- !.
+subst_func(chop, _, P, chop(P)) :- !.
 subst_func(Id, Alphs, P, apply(Id, Alphs, P)).
 
 parse_grapheme_subst(Alphs, P, X) :-
@@ -638,4 +646,4 @@ enum_transforms(Id, SAlph/DAlph, From = To) :-
     grapheme_replace(R, From, To).
 
 transform_target(Id, SAlph, DAlph) :-
-    transform_rule(Id, SAlph, _, DAlph, _, false).
+    transform_rule(Id, SAlph, _, DAlph, _, false), !.

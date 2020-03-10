@@ -95,9 +95,9 @@ alphabet_def(Alph) -->
 alphabet_def(Alph) -->
     keyword(`token`), lexeme(id(Name)), !,
     uchars(Prefix),
-    list_of_classes(Classes),
+    lexeme(id(SubAlph)),
     uchars0(Suffix),
-    { define_text_token(Alph, Name, Prefix, Classes, Suffix) }.
+    { define_text_token(Alph, Name, Prefix, SubAlph, Suffix) }.
 
 alphabet_def(_) --> syntax_error(unknown_alphabet_def).
 
@@ -252,18 +252,23 @@ alterations(Alph, [A]) -->
     id(A), { make_alteration(Alph, A) }.
 
 parse_pipeline_steps([H | T]) -->
-    lexeme(`->`), parse_pipeline_step(H), !,
+    lexeme(`->`),
+    parse_pipeline_step(H), !,
     parse_pipeline_steps(T).
 
 parse_pipeline_steps([]) --> [].
 
 parse_pipeline_step(read) --> keyword(`read`), !.
 parse_pipeline_step(join) --> keyword(`join`), !.
+parse_pipeline_step(sample(N)) -->
+    keyword(`sample`),
+    lexeme(integer(N)), { N > 0 }, !.
 parse_pipeline_step(dump) --> keyword(`dump`), !.
 parse_pipeline_step(graphemes(Alph)) -->
     keyword(`graphemes`),
     lexeme(id(Alph)).
 parse_pipeline_step(map(Step)) -->
+    keyword(`map`),
     parse_pipeline_step(Step), !.
 parse_pipeline_step(call(Id)) -->
     keyword(`call`),
@@ -328,7 +333,7 @@ uchars([C | T]) --> uchar(C), !, uchars0(T).
 uchars0(L) --> uchars(L), !.
 uchars0([]) --> gblanks.
 
-uchar(C0) --> `<C-`, [C], { code_type(C, lower), C0 is C - 60 }, `>`, !.
+uchar(C0) --> `<C-`, [C], { code_type(C, lower), C0 is C - 96 }, `>`, !.
 uchar(C) --> `\\`, !, [C].
 uchar(C) --> `<U+`, !, xinteger(C), `>`.
 uchar(C) --> \+ separator, [C].
@@ -337,13 +342,6 @@ list_of_graphemes(Alph, [G | T]) -->
     lexeme(parse_single_grapheme(Alph, G)),
     list_of_graphemes(Alph, T), !.
 list_of_graphemes(_, []) --> gblanks.
-
-list_of_classes([C|T]) -->
-    lexeme(id(C)), lexeme(`|`), !,
-    list_of_classes(T).
-list_of_classes([C]) -->
-    lexeme(id(C)), !.
-list_of_classes([]) --> [].
 
 ids([H|T]) -->
     lexeme(id(H)), !,
