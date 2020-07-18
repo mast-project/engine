@@ -1,0 +1,58 @@
+fmod SEGMENT{X :: TRIV} is
+
+     protecting NAT .
+
+     sort Item 
+     sort Segment .
+     subsort Item < Segment .
+
+     op [_] : X$Elt -> Item [ctor] .
+
+     op __ : Segment Segment -> Segment [ctor assoc] .
+
+     sort Boundary Prefix Suffix FullWord .
+     subsort Prefix Suffix < Segment .
+     subsort FullWord < Prefix Suffix .
+     subsort Boundary < FullWord .
+
+     op # : -> Boundary .
+
+     op __ : Segment Suffix -> Suffix [ctor assoc] .
+     op __ : Prefix Segment -> Prefix [ctor assoc] .
+     op __ : Prefix Suffix -> FullWord [ctor assoc] .
+
+     eq # # = # .
+
+     eq S1:Segment # S2:Segment = S1:Segment S2:Segment .
+
+     op $prefix : Segment Nat -> Segment . 
+     
+     eq $prefix(#, N:Nat) = # .
+     eq $prefix(S:Segment, 0) = # .
+     eq $prefix(I:Item S:Segment, 1) = I:Item .
+     eq $prefix(I:Item S:Segment, s N:NzNat) = I:Item $prefix(S:Segment, N:NzNat) .
+     
+     op slice : Segment Nat Nat -> Segment .            
+     eq slice(S:Segment, 0, N:Nat) = $prefix(S:Segment, N:Nat) .
+     eq slice(#, N:Nat, N1:Nat) = # .
+     eq slice(I:Item S:Segment, s N:Nat, N1:Nat) = slice(S:Segment, N:Nat, N1:Nat) .
+
+endfm
+
+fmod QID-SEGMENT is
+
+     protecting SEGMENT{Qid} .
+
+endfm
+
+view Char from TRIV to STRING is
+
+     sort Elt to Char .
+
+endv
+
+fmod CHAR-SEGMENT is
+
+     protecting SEGMENT{Char} .  
+
+endfm

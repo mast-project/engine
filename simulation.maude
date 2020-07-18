@@ -1,0 +1,149 @@
+fmod PHONEMIC is
+     protecting STRING .
+     sort Feature .
+     
+     op syllabic : -> Feature [ctor] .
+     op consonant : -> Feature [ctor] .
+     op sonorant : -> Feature [ctor] .
+     op voiced : -> Feature [ctor] .
+     op nasal : -> Feature [ctor] .
+     
+     op labial : -> Feature [ctor] .
+     op front : -> Feature [ctor] .
+     op back : -> Feature [ctor] .
+     op high : -> Feature [ctor] .
+     op low : -> Feature [ctor] .
+     op tense : -> Feature [ctor] .
+     
+     op continuant : -> Feature [ctor] .
+     op lateral : -> Feature [ctor] .
+     op trill : -> Feature [ctor] .
+     
+     sort FeatureSet .
+     
+     op empty : -> FeatureSet [ctor] .
+     op +_ : Feature -> FeatureSet [ctor] .
+     op -_ : Feature -> FeatureSet [ctor] .
+     
+     op _, _ : FeatureSet FeatureSet -> FeatureSet [ctor assoc comm id: empty] .
+
+     vars Fs Fs1 Fs2 : FeatureSet .
+     var F : Feature .
+     
+     eq + F, + F = + F .
+     eq - F, - F = - F .
+                 
+     op merge : FeatureSet FeatureSet -> FeatureSet .
+        
+     eq merge((+ F, Fs1), (- F, Fs2)) = - F, merge(Fs1, Fs2) .
+     eq merge((- F, Fs1), (+ F, Fs2)) = + F, merge(Fs1, Fs2) .
+     eq merge(Fs1, Fs2) = Fs1, Fs2 [owise] .
+     
+     op subsumes : FeatureSet FeatureSet -> Bool .
+     eq subsumes(empty, Fs) = true .
+     eq subsumes((+ F, Fs1), (+ F, Fs2)) = subsumes(Fs1, Fs2) .
+     eq subsumes((- F, Fs1), (- F, Fs2)) = subsumes(Fs1, Fs2) .
+     eq subsumes(Fs1, Fs2) = false [owise] .
+
+     sort Sound .
+     
+     op [_] : FeatureSet -> Sound [ctor] .   
+          
+     sort Segment .
+     subsort Sound < Segment . 
+     
+     op __ : Segment Segment -> Segment [ctor assoc] .
+       
+     sort Boundary Prefix Suffix FullWord .
+     subsort Prefix Suffix < Segment .
+     subsort FullWord < Prefix Suffix .
+     subsort Boundary < FullWord .
+     
+     op # : -> Boundary .
+
+     op __ : Segment Suffix -> Suffix [ctor assoc] .
+     op __ : Prefix Segment -> Prefix [ctor assoc] .
+     op __ : Prefix Suffix -> FullWord [ctor assoc] .
+
+     eq # # = # .
+
+     var Str : String .
+     
+     op decode1 : Char ~> Segment .
+     op decode : String ~> Segment .
+     
+     eq decode("") = # .
+     ceq decode(Str) = decode(substring(Str, 1, 
+     
+     sort Pattern .
+     subsort Segment < Pattern .
+     
+     op __ : Pattern Pattern -> Pattern [ctor assoc] .
+     op _|_ : Pattern Pattern -> Pattern [ctor assoc comm prec 57] .
+     op _&_ : Pattern Pattern -> Pattern [ctor assoc comm prec 53] .
+     op _<<_ : Pattern Pattern -> Pattern [ctor prec 60] .
+     op _>>_ : Pattern Pattern -> Pattern [ctor prec 60] .
+     op {_} : Pattern -> Pattern [ctor] .
+     op [_] : Pattern -> Pattern [ctor] .
+     op ... : -> Pattern [ctor] .
+     
+     sort Position .
+     
+     op <_:_> : Segment Segment -> Position [ctor] .
+
+     sort PositionSet .
+     subsort Position < PositionSet .
+
+     vars Left Right S Next : Segment .
+     vars P P0 : Pattern .
+     vars Pos M : Position .
+     vars PS PS0 : PositionSet .
+          
+     op empty : -> PositionSet [ctor] .
+     op __ : PositionSet PositionSet -> PositionSet [ctor assoc comm id: empty] .
+     
+     eq Pos Pos = Pos .
+
+     op intersection : PositionSet PositionSet -> PositionSet [assoc comm] .
+     
+     eq intersection(Pos PS, Pos PS0) = Pos (intersection(PS, PS0)) .
+     eq intersection(PS, PS0) = empty [owise] .
+              
+     op match : Position Pattern -> PositionSet .
+     op matchAll : PositionSet Pattern -> PositionSet .
+     op matchRep : PositionSet Pattern -> PositionSet .
+     op matchFilter : PositionSet Pattern -> PositionSet .
+     
+     eq matchAll(empty, P) = empty .
+     eq matchAll(Pos PS, P) = match(Pos, P) matchAll(PS, P) .
+          
+     eq matchRep(empty, P) = empty .
+     eq matchRep(Pos PS, P) = Pos matchRep(match(Pos, P), P) matchRep(PS, P) .
+     
+     eq matchFilter(empty, P) = empty .
+     ceq matchFilter(Pos PS, P) = Pos matchFilter(PS, P) if match(Pos, P) =/= empty .
+     eq matchFilter(Pos PS, P) = matchFilter(PS, P) [owise] .  
+     
+     eq match(< Left : # >, #) = < Left : # > .
+     eq match(< # : Right >, # P) = match(< # : Right >, P) .
+     ceq match(Pos, P #) = < Left : # > if < Left : # > := match(Pos, P) .
+     eq match(Pos, P P0) = matchAll(match(Pos, P), P0) [owise] .
+     ceq match(< Left : [Fs1] Right >, [Fs2]) = < Left [Fs1] : Right > if subsumes(Fs2, Fs1) .
+     eq match(Pos, P | P0) = match(Pos, P) match(Pos, P0) .
+     
+     eq match(Pos, P & P0) = intersection(match(Pos, P), match(Pos, P0)) .
+     
+     eq match(Pos, [P]) = Pos match(Pos, P) .
+     
+     eq match(Pos, {P}) = matchRep(matchAll(match(Pos, P), P), P) .
+
+     eq match(Pos, ...) = matchRep(Pos, [empty]) .
+          
+     eq match(Pos, P >> P0) = matchFilter(match(Pos, P), P0) .
+     
+     ceq match(< Left S : Right >, P << P0) = match(< Left S : Right >, P0)
+         if < Left S : Right > PS := match(< Left : S Right >, P) .
+     
+     eq match(Pos, P) = empty [owise] .
+          
+endfm

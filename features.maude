@@ -1,0 +1,29 @@
+fmod FEATURESET{X :: TRIV} is
+     sort FeatureSet .
+
+     op empty : -> FeatureSet [ctor] .
+     op +_ : X$Elt -> FeatureSet [ctor] .
+     op -_ : X$Elt -> FeatureSet [ctor] .
+
+     op _, _ : FeatureSet FeatureSet -> FeatureSet [ctor assoc comm id: empty] .
+
+     vars Fs Fs1 Fs2 : FeatureSet .
+     var F : X$Elt .
+
+     eq + F, + F = + F .
+     eq - F, - F = - F .
+     eq + F, - F = empty .
+
+     op merge : FeatureSet FeatureSet -> FeatureSet .
+
+     eq merge((+ F, Fs1), (- F, Fs2)) = - F, merge(Fs1, Fs2) .
+     eq merge((- F, Fs1), (+ F, Fs2)) = + F, merge(Fs1, Fs2) .
+     eq merge(Fs1, Fs2) = Fs1, Fs2 [owise] .
+
+     op subsumes : FeatureSet FeatureSet -> Bool .
+     eq subsumes(empty, Fs) = true .
+     eq subsumes((+ F, Fs1), (+ F, Fs2)) = subsumes(Fs1, Fs2) .
+     eq subsumes((- F, Fs1), (- F, Fs2)) = subsumes(Fs1, Fs2) .
+     eq subsumes(Fs1, Fs2) = false [owise] .
+
+endfm
