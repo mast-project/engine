@@ -1,58 +1,81 @@
 fmod SEGMENT{X :: TRIV} is
 
-     protecting NAT .
+    protecting NAT .
+    
+    sort Item .
+    sort Segment .
+    subsort Item < Segment .
+    
+    op [_] : X$Elt -> Item [ctor] .
 
-     sort Item 
-     sort Segment .
-     subsort Item < Segment .
+    op epsilon : -> Segment [ctor] .
+    op __ : Segment Segment -> Segment [ctor assoc id: epsilon prec 25] .
+    
+    sorts Boundary Prefix Suffix FullWord .
+    subsort Prefix Suffix < Segment .
+    subsort FullWord < Prefix Suffix .
+    subsort Boundary < Item .
+    subsort Boundary < FullWord .
+    
+    op # : -> Boundary .
+    
+    op __ : Segment Suffix -> Suffix [ctor assoc id: epsilon prec 25] .
+    op __ : Prefix Segment -> Prefix [ctor assoc id: epsilon prec 25] .
+    op __ : Prefix Suffix -> FullWord [ctor assoc id: epsilon prec 25] .
 
-     op [_] : X$Elt -> Item [ctor] .
+    vars X X1 X2 : Item .
+    vars S Ins : Segment .
+    vars N P L : Nat .
+    
+    eq # # = # .
+    eq X1 # X2 = X1 X2 .
+    
+    op prefix : Segment Nat -> Segment . 
 
-     op __ : Segment Segment -> Segment [ctor assoc] .
+    eq prefix(epsilon, N) = epsilon .
+    eq prefix(S, 0) = epsilon .
+    eq prefix(X S, s N) = X prefix(S, N) .
+    
+    op stripPrefix : Segment Nat -> Segment .
+    eq stripPrefix(epsilon, N) = epsilon .
+    eq stripPrefix(S, 0) = S .
+    eq stripPrefix(X S, s N) = stripPrefix(S, N) .
 
-     sort Boundary Prefix Suffix FullWord .
-     subsort Prefix Suffix < Segment .
-     subsort FullWord < Prefix Suffix .
-     subsort Boundary < FullWord .
+    op slice : Segment Nat Nat -> Segment .
+    eq slice(S, P, L) = prefix(stripPrefix(S, P), L) .
+    
+	op insert : Segment Nat Segment -> Segment .
+	eq insert(S, P, Ins) = prefix(S, P) Ins:Segment stripPrefix(S, P) .
 
-     op # : -> Boundary .
+    op cut : Segment Nat Nat -> Segment .
+	eq cut(S, P, L) = prefix(S, P) stripPrefix(S, P + L) .
 
-     op __ : Segment Suffix -> Suffix [ctor assoc] .
-     op __ : Prefix Segment -> Prefix [ctor assoc] .
-     op __ : Prefix Suffix -> FullWord [ctor assoc] .
-
-     eq # # = # .
-
-     eq S1:Segment # S2:Segment = S1:Segment S2:Segment .
-
-     op $prefix : Segment Nat -> Segment . 
-     
-     eq $prefix(#, N:Nat) = # .
-     eq $prefix(S:Segment, 0) = # .
-     eq $prefix(I:Item S:Segment, 1) = I:Item .
-     eq $prefix(I:Item S:Segment, s N:NzNat) = I:Item $prefix(S:Segment, N:NzNat) .
-     
-     op slice : Segment Nat Nat -> Segment .            
-     eq slice(S:Segment, 0, N:Nat) = $prefix(S:Segment, N:Nat) .
-     eq slice(#, N:Nat, N1:Nat) = # .
-     eq slice(I:Item S:Segment, s N:Nat, N1:Nat) = slice(S:Segment, N:Nat, N1:Nat) .
-
+	op length : Segment -> Nat .
+	eq length(epsilon) = 0 .
+	eq length(X S) = s length(S) .
+		
 endfm
 
 fmod QID-SEGMENT is
 
-     protecting SEGMENT{Qid} .
+    protecting SEGMENT{Qid} .
 
 endfm
 
 view Char from TRIV to STRING is
 
-     sort Elt to Char .
+    sort Elt to Char .
 
 endv
 
 fmod CHAR-SEGMENT is
 
-     protecting SEGMENT{Char} .  
+    protecting NAT .
+    protecting STRING .
+    protecting SEGMENT{Char} .
+
+	op stringToSegment : String -> Segment .
+	eq stringToSegment("") = epsilon .
+	eq stringToSegment(S:String) = [substr(S:String, 0, 1)] stringToSegment(substr(S:String, 1, sd(length(S:String), 1))) .
 
 endfm

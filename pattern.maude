@@ -1,0 +1,52 @@
+fth SUBSUMABLE is
+    protecting BOOL .
+    including TRIV .
+	op _<=_ : Elt Elt -> Bool [prec 37] .	
+endfth
+
+view SUBSUMABLE from TRIV to SUBSUMABLE is
+endv
+
+view QidSubsumable from SUBSUMABLE to QID is
+    sort Elt to Qid .
+	op (X:Elt <= Y:Elt) to term (X:Qid == Y:Qid) .
+endv
+		
+fmod PATTERN{X :: SUBSUMABLE} is
+	protecting SEGMENT{SUBSUMABLE}{X} .
+    protecting SEGMENTSET{SUBSUMABLE}{X} .
+
+	sorts Pattern PatternItem .
+    subsort Segment < Pattern .
+    subsort PatternItem < Pattern .
+    subsort Item < PatternItem .
+
+    op subsumes : Item Item -> Bool .
+    
+    op __ : Pattern Pattern -> Pattern [ctor assoc id: epsilon prec 25] .
+    op _|_ : Pattern Pattern -> PatternItem [ctor assoc comm prec 57] .
+    op _&_ : Pattern Pattern -> PatternItem [ctor assoc comm prec 53] .
+    op _<<_ : Pattern Pattern -> PatternItem [ctor prec 60] .
+    op _>>_ : Pattern Pattern -> PatternItem [ctor prec 60] .
+    op {_} : Pattern -> PatternItem [ctor] .
+    op [_] : Pattern -> PatternItem [ctor] .
+    op ... : -> PatternItem [ctor] .
+
+	op matchAfter : Pattern Segment Segment -> SegmentSet .
+    op matchThen : Pattern Segment Segment SegmentSet -> SegmentSet .
+
+    vars S1 S2 M : Segment .
+    vars P P1 P2 : Pattern .
+    vars SS : SegmentSet .
+
+    ceq matchThen(P, S1, S2, (M, SS)) = matchAfter(P, S1 M, S0:Segment) if M S0:Segment := S2 .
+    eq matchThen(P, S1, S2, SS) = empty [owise] .
+    
+	eq matchAfter(PI:PatternItem P, S1, S2) = matchThen(P, S1, S2, matchAfter(PI:PatternItem, S1, S2)) .
+    ceq matchAfter(X1:Item, S1, X2:Item S2) = X2:Item if X1:Item <= X2:Item .
+	eq matchAfter(P1 | P2, S1, S2) = matchAfter(P1, S1, S2), matchAfter(P2, S1, S2) .
+	ceq matchAfter(P1 << P2, S1 M, S2) = matchAfter(P2, S1 M, S2) if M, SS:SegmentSet := matchAfter(P1, S1, M S2) .
+	ceq matchAfter(P1 >> P2, S1, S2) = SS if SS := matchAfter(S1, P1, S2) /\ matchThen(P2, S1, S2, SS) =\= empty .
+	eq matchAfter(P, S1, S2) = empty .
+		
+endfm

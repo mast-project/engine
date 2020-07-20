@@ -1,0 +1,41 @@
+fmod SEGMENTSET{X :: TRIV} is
+	protecting SEGMENT{X} .
+
+    sort SegmentSet .
+	subsort Segment < SegmentSet .
+
+	op empty : -> SegmentSet [ctor] .
+	op _,_ : SegmentSet SegmentSet -> SegmentSet [ctor assoc comm id: empty prec 121] .
+
+    eq X:Segment, X:Segment = X:Segment .
+    
+	op _+_ : SegmentSet SegmentSet -> SegmentSet [assoc prec 33] .
+
+    eq empty + empty = empty .
+	eq S:Segment + empty = empty .
+	eq empty + S:Segment = empty .
+    eq S:Segment + S1:Segment = S:Segment S1:Segment .
+	eq (S:Segment, SS:SegmentSet) + S1:Segment = (S:Segment + S1:Segment), (SS:SegmentSet + S1:Segment) .
+	eq S:Segment + (S1:Segment, SS:SegmentSet) = (S:Segment + S1:Segment), (S:Segment +  SS:SegmentSet) .
+
+	op _&_ : SegmentSet SegmentSet -> SegmentSet [assoc comm prec 53] .
+	eq (S:Segment, SS1:SegmentSet) & (S:Segment, SS2:SegmentSet) = S:Segment, (SS1:SegmentSet & SS2:SegmentSet) .
+	eq SS1:SegmentSet & SS2:SegmentSet = empty [owise] .
+
+	op _\_ : SegmentSet SegmentSet -> SegmentSet [gather (E e)] .
+	eq (S:Segment, SS1:SegmentSet) \ (S:Segment, SS2:SegmentSet) = SS1:SegmentSet \ SS2:SegmentSet .
+	eq SS1:SegmentSet \ SS2:SegmentSet = SS1:SegmentSet [owise] .
+endfm
+
+fmod QID-SEGMENTSET is
+
+    protecting SEGMENTSET{Qid} .
+
+endfm
+
+fmod CHAR-SEGMENTSET is
+
+    protecting SEGMENTSET{Char} .
+
+endfm
+

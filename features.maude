@@ -1,29 +1,51 @@
 fmod FEATURESET{X :: TRIV} is
-     sort FeatureSet .
+    protecting NAT .
+    
+    sort FeatureSet .
 
-     op empty : -> FeatureSet [ctor] .
-     op +_ : X$Elt -> FeatureSet [ctor] .
-     op -_ : X$Elt -> FeatureSet [ctor] .
+    op empty : -> FeatureSet [ctor] .
+    op +_ : X$Elt -> FeatureSet [ctor] .
+    op -_ : X$Elt -> FeatureSet [ctor] .
+    
+    op _, _ : FeatureSet FeatureSet -> FeatureSet [ctor assoc comm id: empty prec 121] .
+    
+    vars Fs Fs1 Fs2 : FeatureSet .
+    var F : X$Elt .
+    
+    eq + F, + F = + F .
+    eq - F, - F = - F .
+    eq + F, - F = empty .
+    
+    op merge : FeatureSet FeatureSet -> FeatureSet .
+    
+    eq merge((+ F, Fs1), (- F, Fs2)) = - F, merge(Fs1, Fs2) .
+    eq merge((- F, Fs1), (+ F, Fs2)) = + F, merge(Fs1, Fs2) .
+    eq merge(Fs1, Fs2) = Fs1, Fs2 [owise] .
+    
+    op subsumes : FeatureSet FeatureSet -> Bool .
+    eq subsumes(empty, Fs) = true .
+    eq subsumes((+ F, Fs1), (+ F, Fs2)) = subsumes(Fs1, Fs2) .
+    eq subsumes((- F, Fs1), (- F, Fs2)) = subsumes(Fs1, Fs2) .
+    eq subsumes(Fs1, Fs2) = false [owise] .
+    
+	op inverse : FeatureSet -> FeatureSet .
+	eq inverse(empty) = empty .
+	eq inverse((+ F, Fs)) = - F, inverse(Fs) .
+	eq inverse((- F, Fs)) = + F, inverse(Fs) . 
 
-     op _, _ : FeatureSet FeatureSet -> FeatureSet [ctor assoc comm id: empty] .
+	op size : FeatureSet -> Nat .
+	eq size(empty) = 0 .
+	eq size((+ F, Fs)) = s size(Fs) .
+	eq size((- F, Fs)) = s size(Fs) .
 
-     vars Fs Fs1 Fs2 : FeatureSet .
-     var F : X$Elt .
+	op _&_ : FeatureSet FeatureSet -> FeatureSet [assoc comm prec 53] .
+	eq (+ F, Fs1) & (+ F, Fs2) = (+ F), (Fs1 & Fs2) .
+	eq (- F, Fs1) & (- F, Fs2) = (- F), (Fs1 & Fs2) .
+	eq Fs1 & Fs2 = empty [owise] .
+		
+endfm
 
-     eq + F, + F = + F .
-     eq - F, - F = - F .
-     eq + F, - F = empty .
-
-     op merge : FeatureSet FeatureSet -> FeatureSet .
-
-     eq merge((+ F, Fs1), (- F, Fs2)) = - F, merge(Fs1, Fs2) .
-     eq merge((- F, Fs1), (+ F, Fs2)) = + F, merge(Fs1, Fs2) .
-     eq merge(Fs1, Fs2) = Fs1, Fs2 [owise] .
-
-     op subsumes : FeatureSet FeatureSet -> Bool .
-     eq subsumes(empty, Fs) = true .
-     eq subsumes((+ F, Fs1), (+ F, Fs2)) = subsumes(Fs1, Fs2) .
-     eq subsumes((- F, Fs1), (- F, Fs2)) = subsumes(Fs1, Fs2) .
-     eq subsumes(Fs1, Fs2) = false [owise] .
+fmod QID-FEATURESET is
+    protecting FEATURESET{Qid} .
 
 endfm
