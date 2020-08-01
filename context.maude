@@ -1,0 +1,162 @@
+fmod CONTEXT{X :: TRIV} is
+    protecting NAT .
+    protecting SEGMENT{X} .
+
+    sort Context{X} NeContextSet{X} .
+
+    op _<_>_ : Segment{X} Segment{X} Segment{X} -> Context{X} [ctor prec 30] .
+
+    sort ContextSet{X} .
+    subsort NeContextSet{X} < ContextSet{X} .
+    subsort Context{X} < NeContextSet{X} .
+
+    op empty : -> ContextSet{X} [ctor] .
+    op _,_ : ContextSet{X} ContextSet{X} -> ContextSet{X} [ctor assoc comm id: empty prec 121] .
+    op _,_ : NeContextSet{X} ContextSet{X} -> NeContextSet{X} [ctor assoc comm id: empty prec 121] .
+    op _,_ : ContextSet{X} NeContextSet{X} -> NeContextSet{X} [ctor assoc comm id: empty prec 121] .
+
+    vars S1 S2 S3 S4 S5 S6 : Segment{X} .
+    var NS : NeSegment{X} .
+    vars C1 C2 : Context{X} .
+    vars CS1 CS2 : ContextSet{X} .
+    vars NCS : NeContextSet{X} .
+    vars X1 X2 : Item{X} .
+
+    eq C1, C1 = C1 .
+
+    op left : Context{X} -> Segment{X} .
+    eq left(S1 < S2 > S3) = S1 .
+
+    op right : Context{X} -> Segment{X} .
+    eq right(S1 < S2 > S3) = S3 .
+
+    op extract : Context{X} -> Segment{X} .
+    eq extract(S1 < S2 > S3) = S2 .
+
+    op length : Context{X} -> Nat .
+    eq length(C1) = length(extract(C1)) .
+
+    op join : Context{X} -> Segment{X} .
+    eq join(S1 < S2 > S3) = S1 S2 S3 .
+
+    op replace : Context{X} Segment{X} -> Context{X} .
+    eq replace(S1 < S2 > S3, S4) = S1 < S4 > S3 .
+
+    op replace : ContextSet{X} Segment{X} -> ContextSet{X} .
+    eq replace(empty, S1) = empty .
+    eq replace((C1, NCS), S1) = replace(C1, S1), replace(NCS, S1) .
+
+    op replace : ContextSet{X} Context{X} -> Context{X} .
+    eq replace(CS1, C1) = replace(CS1, extract(C1)) .
+
+    sort Amount .
+    subsort Nat < Amount .
+
+    op all : -> Amount [ctor] .
+
+    var A : Amount .
+
+    op next : Context{X} Amount -> Segment{X} .
+
+    eq next(S1 < S2 > S3, all) = S3 .
+    eq next(C1, 0) = epsilon .
+    eq next(S1 < S2 > X1 S3, s N:Nat) = X1 next(S1 < S2 > S3, N:Nat) .
+    eq next(S1 < S2 > epsilon, N:NzNat) = epsilon .
+
+    op next : Context{X} -> Segment{X} .
+    eq next(C1) = next(C1, 1) .
+
+    op shift : Context{X} Amount -> Context{X} .
+
+    eq shift(S1 < S2 > S3, all) = S1 < S2 S3 > epsilon .
+    eq shift(C1, 0) = C1 .
+    eq shift(S1 < S2 > X1 S3, s N:Nat) = shift(S1 < S2 X1 > S3, N:Nat) .
+    eq shift(S1 < S2 > epsilon, N:NzNat) = S1 < S2 > epsilon .
+
+    op shift : ContextSet{X} Amount -> ContextSet{X} .
+
+    eq shift(empty, A) = empty .
+    eq shift((C1, NCS), A) = shift(C1, A), shift(NCS, A) .
+
+    op shift : ContextSet{X} -> ContextSet{X} .
+    eq shift(CS1) = shift(CS1, 1) .
+
+    op unshift : Context{X} Amount -> Context{X} .
+
+    eq unshift(S1 < S2 > S3, all) = S1 < epsilon > S2 S3 .
+    eq unshift(C1, 0) = C1 .
+    eq unshift(S1 < S2 X1 > S3, s N:Nat) = unshift(S1 < S2 > X1 S3, N:Nat) .
+    eq unshift(S1 < epsilon > S2, N:NzNat) = S1 < epsilon > S2 .
+
+    op unshift : ContextSet{X} Amount -> ContextSet{X} .
+
+    eq unshift(empty, A) = empty .
+    eq unshift((C1, NCS), A) = unshift(C1, A), unshift(NCS, A) .
+
+    op unshift : ContextSet{X} -> ContextSet{X} .
+    eq unshift(CS1) = unshift(CS1, 1) .
+
+    op consume : Context{X} Amount -> Context{X} .
+
+    eq consume(S1 < S2 > S3, all) = S1 S2 < epsilon > S3 .
+    eq consume(C1, 0) = C1 .
+    eq consume(S1 < X1 S2 > S3, s N:Nat ) = consume(S1 X1 < S2 > S3, N:Nat) .
+    eq consume(S1 < epsilon > S2, N:NzNat) = S1 < epsilon > S2 .
+
+    op consume : ContextSet{X} Amount -> ContextSet{X} .
+    eq consume(empty, A) = empty .
+    eq consume((C1, NCS), A) = consume(C1, A), consume(NCS, A) .
+
+    op consume : ContextSet{X} -> Context{X} .
+    eq consume(CS1) = consume(CS1, all) .
+
+    op unconsume : Context{X} Amount -> Context{X} .
+
+    eq unconsume(S1 < S2 > S3, all) = epsilon < S1 S2 > S3 .
+    eq unconsume(C1, 0) = C1 .
+    eq unconsume(S1 X1 < S2 > S3, s N:Nat ) = unconsume(S1 < X1 S2 > S3, N:Nat) .
+    eq unconsume(epsilon < S1 > S2, N:NzNat) = epsilon < S1 > S2 .
+
+    op unconsume : ContextSet{X} Amount -> ContextSet{X} .
+    eq unconsume(empty, A) = empty .
+    eq unconsume((C1, NCS), A) = consume(C1, A), consume(NCS, A) .
+
+    op unconsume : ContextSet{X} -> Context{X} .
+    eq unconsume(CS1) = consume(CS1, 1) .
+
+    op _@_ : ContextSet{X} Nat -> Context{X} .
+    eq CS1 @ N:Nat = unshift(consume(CS1, N:Nat), all) .
+
+    op _@_ : Segment{X} Nat -> Context{X} .
+    eq S1 @ N:Nat = epsilon < S1 > epsilon @ N:Nat .
+
+    op reset : ContextSet{X} -> Context{X} .
+    eq reset(CS1) = unshift(unconsume(CS1, all), all)  .
+
+    op _&_ : ContextSet{X} ContextSet{X} -> ContextSet{X} [assoc comm prec 53] .
+    eq (C1, CS1) & (C1, CS2) = C1, (CS1 & CS2) .
+    eq CS1 & CS2 = empty [owise] .
+
+    op _\_ : ContextSet{X} ContextSet{X} -> ContextSet{X} [gather (E e)] .
+    eq (C1, CS1) \ (C1, CS2) = C1 \ CS2 .
+    eq CS1 \ CS2 = CS1 [owise] .
+
+    op continuations : Context{X} -> ContextSet{X} .
+    ceq continuations(C1) = C1 if next(C1) = epsilon  .
+    eq continuations(C1) = C1, continuations(shift(C1)) .
+
+    op leftmost : ContextSet{X} -> ContextSet{X} .
+    eq leftmost((S1 < S2 > S3, S1 NS < S4 > S5, CS1)) = leftmost((S1 < S2 > S3, CS1)) .
+    eq leftmost(CS1) = CS1 [owise] .
+
+    op longest : ContextSet{X} -> ContextSet{X} .
+    eq longest((S1 < S2 > S3, S1 < S2 NS > S5, CS1)) = longest((S1 < S2 NS > S5, CS1)) .
+    eq longest(CS1) = CS1 [owise] .
+
+endfm
+
+fmod QID-CONTEXT is
+
+    protecting CONTEXT{Qid} .
+
+endfm

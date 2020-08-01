@@ -1,0 +1,51 @@
+mod CHECK is
+    protecting META-LEVEL .
+    protecting NAT .
+    protecting RANDOM .
+
+    op randomBits : NzNat Nat -> Nat .
+    op $randomBig : NzNat Nat -> Nat .
+
+    ceq randomBits(B:NzNat, S:Nat) = $randomBig(N:NzNat, S:Nat * N:NzNat)
+      if N:NzNat := (B:NzNat + 31) quo 32 .
+
+    eq $randomBig(1, S:Nat) = random(S:Nat) .
+    eq $randomBig(s B:NzNat, S:Nat) = random(S:Nat) | $randomBig(B:NzNat, s S:Nat) << 32 [owise] .
+
+
+    sort OpDeclList .
+    sort NeOpDeclList .
+    subsort NeOpDeclList < OpDeclList .
+    subsort OpDecl < NeOpDeclList .
+
+    op nil : -> OpDeclList [ctor] .
+    op _,_ : OpDeclList OpDeclList -> OpDeclList  [ctor assoc prec 121  gather (e E) id: nil] .
+    op _,_ : NeOpDeclList OpDeclList -> NeOpDeclList  [ctor assoc prec 121  gather (e E) id: nil] .
+    op _,_ : OpDeclList NeOpDeclList -> NeOpDeclList  [ctor assoc prec 121  gather (e E) id: nil] .
+
+    op getCtors : Module Type -> OpDeclList [memo] .
+    op $filterCtors : Module Type OpDeclSet -> OpDeclList .
+
+    eq getCtors(M:Module, T:Type) = $filterCtors(M:Module, T:Type, getOps(M:Module)) .
+
+    eq $filterCtors(M:Module, T:Type, none) = nil .
+    ceq $filterCtors(M:Module, T:Type, (O:OpDecl OS:OpDeclSet)) = O:OpDecl, $filterCtors(M:Module, T:Type, OS:OpDeclSet) if
+        (op N:Qid : Args:TypeList -> Ret:Type [ctor AS:AttrSet].) := O:OpDecl /\
+        sortLeq(M:Module, Ret:Type, T:Type) .
+    eq $filterCtors(M:Module, T:Type, (O:OpDecl OS:OpDeclSet)) = $filterCtors(M:Module, T:Type, OS:OpDeclSet) [owise] .
+
+    op $length : OpDeclList -> Nat .
+    eq $length(nil) = 0 .
+    eq $length((O:OpDecl, L:OpDeclList)) = s $length(L:OpDeclList) .
+
+    op $choose : Nat NeOpDeclList -> OpDecl .
+    eq $choose(0, (O:OpDecl, L:OpDeclList)) = O:OpDecl .
+    eq $choose(s N:Nat, (O:OpDecl, L:OpDeclList)) = $choose(N:Nat, L:OpDeclList) .
+
+    op randomTerm : Module Nat Type -> Term .
+    ceq randomTerm(M:Module, I:Nat, T:Type) = R:Term if
+          Ctors:NeOpDeclList := getCtors(M:Module, T:Type) /\
+          L:NzNat := $length(Ctors) /\ N:Nat := I:Nat rem L:NzNat /\
+          C:OpDecl := $choose(Ctors:NeOpDeclList, N:Nat) 
+
+endm

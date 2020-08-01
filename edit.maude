@@ -1,0 +1,39 @@
+fmod EDIT{X :: TRIV} is
+    protecting NAT .
+    protecting SEGMENT{X} .
+
+    sort Edit .
+    sort EditOp .
+    subsort NeEdit
+    subsort EditOp < NeEdit Edit .
+
+    op noop : -> Edit [ctor] .
+    op _._ : Edit Edit -> Edit [ctor assoc id: noop prec 31] .
+    op _._ : NeEdit Edit -> NeEdit [ctor assoc id: noop prec 31] .
+    op _._ : Edit NeEdit -> NeEdit [ctor assoc id: noop prec 31] .
+
+    vars S S1 : Slice{X} .
+    var E : Edit .
+    var NE : NeEdit .
+    var Op : EditOp .
+    vars P P1 P2 L : Nat .
+    var Se
+
+    op @_ : Nat -> EditOp [ctor] .
+    op [_.._] : Nat Nat -> EditOp [ctor] .
+    op [_..] : Nat -> EditOp [ctor] .
+    op {_}/_ : Edit NzNat -> EditOp [ctor] .
+    op =_ : Segment{X} -> EditOp [ctor prec 26] .
+    op -- : -> EditOp [ctor] .
+    op <>_ : Nat -> EditOp [ctor] .
+
+    op apply : Edit Slice{X} -> Slice{X} .
+    op apply : Edit Segment{X} -> Segment{X} .
+
+    eq apply(E, Seg:Segment{X}) = base(apply(E, Seg:Segment{X} : 0 : length(Seg:Segment{X}))) .
+
+    eq apply(noop, S) = S .
+    eq apply((Op, NE), S) = apply(NE, apply(Op, S)) .
+    eq apply(@ P, Swf : P1 : L) = S : P : 0 .
+    eq apply([P1 .. P2], S) = S
+    eq apply([P1 .. ]) = 

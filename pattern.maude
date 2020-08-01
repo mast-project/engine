@@ -1,52 +1,98 @@
-fth SUBSUMABLE is
+fth PARTIAL-ORDER is
     protecting BOOL .
     including TRIV .
-	op _<=_ : Elt Elt -> Bool [prec 37] .	
+    op _<=_ : Elt Elt -> Bool [prec 37] .
 endfth
 
-view SUBSUMABLE from TRIV to SUBSUMABLE is
+view PARTIAL-ORDER from TRIV to PARTIAL-ORDER is
 endv
 
-view QidSubsumable from SUBSUMABLE to QID is
+view QidTrivialPO from PARTIAL-ORDER to QID is
     sort Elt to Qid .
-	op (X:Elt <= Y:Elt) to term (X:Qid == Y:Qid) .
+    op _<=_ to _==_ .
 endv
-		
-fmod PATTERN{X :: SUBSUMABLE} is
-	protecting SEGMENT{SUBSUMABLE}{X} .
-    protecting SEGMENTSET{SUBSUMABLE}{X} .
 
-	sorts Pattern PatternItem .
-    subsort Segment < Pattern .
-    subsort PatternItem < Pattern .
-    subsort Item < PatternItem .
+view QidFeaturesetPO from PARTIAL-ORDER to QID-FEATURESET is
+    sort Elt to FeatureSet{Qid} .
+    op _<=_ to subsumes .
+endv
 
-    op subsumes : Item Item -> Bool .
-    
-    op __ : Pattern Pattern -> Pattern [ctor assoc id: epsilon prec 25] .
-    op _|_ : Pattern Pattern -> PatternItem [ctor assoc comm prec 57] .
-    op _&_ : Pattern Pattern -> PatternItem [ctor assoc comm prec 53] .
-    op _<<_ : Pattern Pattern -> PatternItem [ctor prec 60] .
-    op _>>_ : Pattern Pattern -> PatternItem [ctor prec 60] .
-    op {_} : Pattern -> PatternItem [ctor] .
-    op [_] : Pattern -> PatternItem [ctor] .
-    op ... : -> PatternItem [ctor] .
+fmod PATTERN{X :: PARTIAL-ORDER} is
+    protecting NAT .
+    protecting SEGMENT{PARTIAL-ORDER}{X} .
+    protecting CONTEXT{PARTIAL-ORDER}{X} .
 
-	op matchAfter : Pattern Segment Segment -> SegmentSet .
-    op matchThen : Pattern Segment Segment SegmentSet -> SegmentSet .
+    sorts Pattern{X} PatternItem{X} .
+    subsort Segment{PARTIAL-ORDER}{X} < Pattern{X} .
+    subsort PatternItem{X} < Pattern{X} .
+    subsort Item{PARTIAL-ORDER}{X} < PatternItem{X} .
 
-    vars S1 S2 M : Segment .
-    vars P P1 P2 : Pattern .
-    vars SS : SegmentSet .
+    op __ : Pattern{X} Pattern{X} -> Pattern{X} [ctor assoc id: epsilon prec 25] .
+    op _|_ : Pattern{X} Pattern{X} -> PatternItem{X} [ctor assoc comm prec 57] .
+    op _&_ : Pattern{X} Pattern{X} -> PatternItem{X} [ctor assoc comm prec 53] .
+    op _-_ : Pattern{X} Pattern{X} -> PatternItem{X} [ctor prec 53] .
+    op _<<_ : Pattern{X} Pattern{X} -> PatternItem{X} [ctor prec 60] .
+    op _>>_ : Pattern{X} Pattern{X} -> PatternItem{X} [ctor prec 60] .
+    op {_} : Pattern{X} -> PatternItem{X} [ctor] .
+    op _*_ : Pattern{X} Nat -> PatternItem{X} [ctor prec 31 gather (e E)] .
+    op [_] : Pattern{X} -> PatternItem{X} [ctor] .
+    op ... : -> PatternItem{X} [ctor] .
+    op <<_>> : Pattern{X} -> PatternItem{X} [ctor] .
+    op = : -> PatternItem{X} [ctor] .
 
-    ceq matchThen(P, S1, S2, (M, SS)) = matchAfter(P, S1 M, S0:Segment) if M S0:Segment := S2 .
-    eq matchThen(P, S1, S2, SS) = empty [owise] .
-    
-	eq matchAfter(PI:PatternItem P, S1, S2) = matchThen(P, S1, S2, matchAfter(PI:PatternItem, S1, S2)) .
-    ceq matchAfter(X1:Item, S1, X2:Item S2) = X2:Item if X1:Item <= X2:Item .
-	eq matchAfter(P1 | P2, S1, S2) = matchAfter(P1, S1, S2), matchAfter(P2, S1, S2) .
-	ceq matchAfter(P1 << P2, S1 M, S2) = matchAfter(P2, S1 M, S2) if M, SS:SegmentSet := matchAfter(P1, S1, M S2) .
-	ceq matchAfter(P1 >> P2, S1, S2) = SS if SS := matchAfter(S1, P1, S2) /\ matchThen(P2, S1, S2, SS) =\= empty .
-	eq matchAfter(P, S1, S2) = empty .
-		
+    op matchIn : Pattern{X} ContextSet{PARTIAL-ORDER}{X} -> ContextSet{PARTIAL-ORDER}{X} .
+    op lookahead : Pattern{X} ContextSet{PARTIAL-ORDER}{X} -> ContextSet{PARTIAL-ORDER}{X} .
+    op matchItem : PatternItem{X}  Context{PARTIAL-ORDER}{X} -> ContextSet{PARTIAL-ORDER}{X} .
+
+    vars S S1 S2 S3 M : Segment{PARTIAL-ORDER}{X} .
+    var NS : NeSegment{PARTIAL-ORDER}{X} .
+    vars P P1 P2 : Pattern{X} .
+    var Ctx : Context{PARTIAL-ORDER}{X} .
+    var CS : ContextSet{PARTIAL-ORDER}{X} .
+    var NCS : NeContextSet{PARTIAL-ORDER}{X} .
+
+    eq matchIn(P, empty) = empty .
+    eq matchIn(P, (Ctx, NCS)) = matchIn(P, Ctx), matchIn(P, NCS) .
+
+    eq matchIn(epsilon, Ctx) = Ctx .
+    eq matchIn(PI:PatternItem{X} P, Ctx) = matchIn(P, matchItem(PI:PatternItem{X}, Ctx)) .
+
+    ceq matchItem(B:Boundary{PARTIAL-ORDER}{X}, Ctx) = shift(Ctx) if next(Ctx) = B:Boundary{PARTIAL-ORDER}{X} .
+    ceq matchItem([V1:X$Elt], Ctx) = shift(Ctx) if [V2:X$Elt] := next(Ctx) /\ V1:X$Elt <= V2:X$Elt .
+    eq matchItem(P1 | P2, Ctx) = matchIn(P1, Ctx), matchIn(P2, Ctx) .
+    ceq matchItem(P1 << P2, Ctx) = matchIn(P2, Ctx) if Ctx, CS := matchIn(P1, consume(continuations(reset(Ctx)))) .
+    eq matchItem(P1 >> P2, Ctx) = lookahead(P2, matchIn(P1, Ctx))  .
+    eq matchItem(P1 & P2, Ctx) = matchIn(P1, Ctx) & matchIn(P2, Ctx) .
+    eq matchItem(P1 - P2, Ctx) = matchIn(P1, Ctx) \ matchIn(P2, Ctx) .
+    eq matchItem({P}, Ctx) = matchIn(P [{P}], Ctx) .
+    eq matchItem([P], Ctx) = Ctx, matchIn(P, Ctx) .
+    eq matchItem(P * 0, Ctx) = Ctx .
+    eq matchItem(P * (s N:Nat), Ctx) = matchIn(P P * N:Nat, Ctx) .
+    eq matchItem(..., Ctx) = continuations(Ctx) .
+    eq matchItem(=, S1 < S2 > S2 S) = S1 < S2 S2 > S .
+    ceq matchItem(<< P >>, Ctx) = unconsume(matchIn(P, consume(Ctx)), L:Nat)
+      if L:Nat := length(Ctx) .
+    eq matchItem(P, Ctx) = empty [owise] .
+
+    eq lookahead(P, empty) = empty .
+    ceq lookahead(P, (Ctx, CS)) = Ctx, lookahead(P, CS) if matchIn(P, Ctx) =/= empty .
+    eq lookahead(P, (Ctx, CS)) = lookahead(P, CS) [owise] .
+
+    op match : Pattern{X} Segment{PARTIAL-ORDER}{X} -> ContextSet{PARTIAL-ORDER}{X} .
+    eq match(P, S) = longest(matchIn(P, consume(continuations(epsilon < epsilon > S)))) .
+
+    op matchSeq : Pattern{X} Segment{PARTIAL-ORDER}{X} -> ContextSet{PARTIAL-ORDER}{X} .
+    op $matchSeq : Pattern{X} Context{PARTIAL-ORDER}{X} -> ContextSet{PARTIAL-ORDER}{X} .
+
+    eq matchSeq(P, S) = $matchSeq(P, epsilon < epsilon > S ) .
+    eq $matchSeq(P, S1 < S2 > epsilon) = matchIn(P, S1 < S2 > epsilon) .
+    ceq $matchSeq(P, S1 < S2 > NS) = Ctx, $matchSeq(P, consume(Ctx))
+      if Ctx := longest(matchIn(P, S1 < S2 > NS)) .
+    eq $matchSeq(P, Ctx) = $matchSeq(P, consume(shift(Ctx))) .
+
+
+endfm
+
+fmod QID-PATTERN is
+    protecting PATTERN{QidTrivialPO} .
 endfm
