@@ -2,22 +2,18 @@ mod CHECK is
     protecting META-LEVEL .
     protecting NAT .
     protecting RANDOM .
+    extending CONFIGURATION .
 
-    op randomBits : NzNat Nat -> Nat .
-    op $randomBig : NzNat Nat -> Nat .
+    op arity : OpDecl -> Nat [memo] .
+    eq arity((op N:Qid : TL:TypeList -> R:Type [A:AttrSet] .)) = size(TL:TypeList) .
 
-    ceq randomBits(B:NzNat, S:Nat) = $randomBig(N:NzNat, S:Nat * N:NzNat)
-      if N:NzNat := (B:NzNat + 31) quo 32 .
+    op argTypes : OpDecl -> TypeList .
+    eq argTypes((op N:Qid : TL:TypeList -> R:Type [A:AttrSet] .)) = TL:TypeList .
 
-    eq $randomBig(1, S:Nat) = random(S:Nat) .
-    eq $randomBig(s B:NzNat, S:Nat) = random(S:Nat) | $randomBig(B:NzNat, s S:Nat) << 32 [owise] .
+    op functor : OpDecl -> Constant .
+    eq functor((op N:Qid : TL:TypeList -> R:Type [A:AttrSet] .))  = qid(string(N:Qid) + "." + string(R:Type)) .
 
-
-    sort OpDeclList .
-    sort NeOpDeclList .
-    subsort NeOpDeclList < OpDeclList .
-    subsort OpDecl < NeOpDeclList .
-
+    
     op nil : -> OpDeclList [ctor] .
     op _,_ : OpDeclList OpDeclList -> OpDeclList  [ctor assoc prec 121  gather (e E) id: nil] .
     op _,_ : NeOpDeclList OpDeclList -> NeOpDeclList  [ctor assoc prec 121  gather (e E) id: nil] .
@@ -28,24 +24,131 @@ mod CHECK is
 
     eq getCtors(M:Module, T:Type) = $filterCtors(M:Module, T:Type, getOps(M:Module)) .
 
-    eq $filterCtors(M:Module, T:Type, none) = nil .
+    eq $filterCtors(M:Module, T:Type, (none).OpDeclSet) = nil .
     ceq $filterCtors(M:Module, T:Type, (O:OpDecl OS:OpDeclSet)) = O:OpDecl, $filterCtors(M:Module, T:Type, OS:OpDeclSet) if
         (op N:Qid : Args:TypeList -> Ret:Type [ctor AS:AttrSet].) := O:OpDecl /\
         sortLeq(M:Module, Ret:Type, T:Type) .
     eq $filterCtors(M:Module, T:Type, (O:OpDecl OS:OpDeclSet)) = $filterCtors(M:Module, T:Type, OS:OpDeclSet) [owise] .
 
-    op $length : OpDeclList -> Nat .
-    eq $length(nil) = 0 .
-    eq $length((O:OpDecl, L:OpDeclList)) = s $length(L:OpDeclList) .
+    op filterArity : OpDeclList Nat -> OpDeclList .
+    eq filterArity(nil, N:Nat) = nil .
+    ceq filterArity((O:OpDecl, OL:OpDeclList), N:Nat) = O:OpDecl, filterArity(OL:OpDeclList, N:Nat) if arity(O:OpDecl) == N:Nat .
+    eq filterArity((O:OpDecl, OL:OpDeclList), N:Nat) = filterArity(OL:OpDeclList, N:Nat) [owise] .
+    
+    op size : OpDeclList -> Nat .
+    eq size((nil).OpDeclList) = 0 .
+    eq size((O:OpDecl, L:OpDeclList)) = s size(L:OpDeclList) .
 
     op $choose : Nat NeOpDeclList -> OpDecl .
     eq $choose(0, (O:OpDecl, L:OpDeclList)) = O:OpDecl .
-    eq $choose(s N:Nat, (O:OpDecl, L:OpDeclList)) = $choose(N:Nat, L:OpDeclList) .
+    eq $choose(s N:Nat, (O:OpDecl, L:NeOpDeclList)) = $choose(N:Nat, L:NeOpDeclList) .
 
-    op randomTerm : Module Nat Type -> Term .
-    ceq randomTerm(M:Module, I:Nat, T:Type) = R:Term if
+    op $randomOpDecl : Module Nat Nat Type -> OpDecl .
+    ceq $randomOpDecl(M:Module, L:Nat, I:Nat, T:Type) = $choose(N:Nat, Ctors0:NeOpDeclList) if
           Ctors:NeOpDeclList := getCtors(M:Module, T:Type) /\
-          L:NzNat := $length(Ctors) /\ N:Nat := I:Nat rem L:NzNat /\
-          C:OpDecl := $choose(Ctors:NeOpDeclList, N:Nat) 
+          Ctors0:NeOpDeclList := if L:Nat :: Zero then filterArity(Ctors:NeOpDeclList, 0) else Ctors:NeOpDeclList fi /\
+          NC:NzNat := size(Ctors0:NeOpDeclList) /\ N:Nat := random(I:Nat) rem NC:NzNat .
 
+	op randomTermList : Module Nat Nat TypeList -> RandomTermList .
+	op randomTerm : Module Nat Nat Type -> RandomTerm .
+    op $randomTerm : Module OpDecl Nat Nat -> RandomTerm .
+
+	eq randomTermList(M:Module, L:Nat, I:Nat, nil) = empty : I:Nat .
+	ceq randomTermList(M:Module, L:Nat, I:Nat, T:Type TL:TypeList) =
+		R:Term, RL:TermList : IX:Nat if R:Term : I0:Nat := randomTerm(M:Module, L:Nat, I:Nat, T:Type) /\
+        RL:TermList : IX:Nat := randomTermList(M:Module, L:Nat, I0:Nat, TL:TypeList) .
+
+    eq randomTerm(M:Module, L:Nat, I:Nat, T:Type) =
+        $randomTerm(M:Module, $randomOpDecl(M:Module, L:Nat, I:Nat, T:Type), L:Nat, s I:Nat) .
+
+	ceq $randomTerm(M:Module, O:OpDecl, L:Nat, I:Nat) = functor(O:OpDecl) : I:Nat if arity(O:OpDecl) : Zero .
+	ceq $randomTerm(M:Module, (op N:Qid : TL:TypeList -> RT:Type [A:AttrSet] .), s L:Nat, I:Nat) =
+		N:Qid[RL:TermList] : IX:Nat if
+		RL:TermList : IX:Nat := randomTermList(M:Module, L:Nat, I:Nat, TL:TypeList) .
+    
+    sort VariableSet .
+    sorts NeVariableSet .
+    subsort NeVariableSet < VariableSet .
+
+    op none : -> VariableSet [ctor] .
+    op var_ : Variable -> VariableSet [ctor] .
+    op _;_ : VariableSet VariableSet -> VariableSet [ctor assoc comm id: (none).VariableSet prec 122] .
+    op _;_ : NeVariableSet VariableSet -> NeVariableSet [ctor ditto] .
+    op _;_ : VariableSet NeVariableSet -> NeVariableSet [ctor ditto] .
+
+    eq var V:Variable ; var V:Variable = var V:Variable .
+    
+    op termVars : Term -> VariableSet .
+    op termVars : TermList -> VariableSet .
+    
+    eq termVars(V:Variable) = var V:Variable .
+    eq termVars(C:Constant) = (none).VariableSet .
+    eq termVars(F:Qid[TL:TermList]) = termVars(TL:TermList) .
+    eq termVars(empty) = (none).VariableSet .
+    eq termVars((T:Term, TL:NeTermList)) = termVars(T:Term); termVars(TL:NeTermList) .
+    
+	op substitute : Substitution Term -> Term .
+	op substitute : Substitution TermList -> TermList .
+
+	eq substitute(S:Substitution, empty) = empty .
+	eq substitute(S:Substitution, (T:Term, TL:NeTermList)) = substitute(S:Substitution, T:Term), substitute(S:Substitution, TL:NeTermList) .
+	eq substitute((V:Variable <- T0:Term ; S:Substitution), V:Variable) = T0:Term .
+	eq substitute(S:Substitution, F:Qid[TL:NeTermList]) = F:Qid[substitute(S:Substitution, TL:NeTermList)] .
+	eq substitute(S:Substitution, T:Term) = T:Term [owise] .
+
+	op randomSubstitution : Module Nat Nat VariableSet -> RandomSubstitution .
+
+	eq randomSubstitution(M:Module, L:Nat, I:Nat, (none).VariableSet) = (none).Substitution : I:Nat .
+	ceq randomSubstitution(M:Module, L:Nat, I:Nat, (var V:Variable ; VS:VariableSet)) =
+	 	V:Variable <- R:Term ; S:Substitution : IX:Nat if
+	 	  R:Term : I0:Nat := randomTerm(M:Module, L:Nat, I:Nat, getType(V:Variable)) /\
+		  S:Substitution : IX:Nat := randomSubstitution(M:Module, L:Nat, I0:Nat, VS:VariableSet) .
+
+    sort AssertionSet .
+    sort NeAssertionSet .
+    sort Assertion .
+    subsort Assertion < NeAssertionSet .
+    subsort NeAssertionSet < AssertionSet .
+
+    op trivial : -> AssertionSet [ctor] .
+    op _and_ : AssertionSet AssertionSet -> AssertionSet [ctor comm assoc id: trivial prec 55] .
+    op assert_ : Equation -> Assertion [ctor] .
+    op assert_ : MembAx -> Assertion [ctor] .
+    op assert_ : Rule -> Assertion [ctor] .
+    
+    op getAssertions : Module  -> AssertionSet [memo] .
+    op $filterEqnAsserts : EquationSet -> AssertionSet .
+    op $filterMbaxAsserts : MembAxSet -> AssertionSet .
+    op $filterRuleAsserts : RuleSet -> AssertionSet .
+
+    eq getAssertions(M:Module) = $filterEqnAsserts(getEqs(M:Module)) and
+        $filterMbaxAsserts(getMbs(M:Module)) and
+        $filterRuleAsserts(getRls(M:Module)) .
+
+    eq $filterEqnAsserts((none).EquationSet) = trivial .
+    ceq $filterEqnAsserts(E:Equation ES:EquationSet) = assert E:Equation and $filterEqnAsserts(ES:EquationSet) if
+        (eq T1:Term = T2:Term [nonexec AS:AttrSet] .) := E:Equation .
+    ceq $filterEqnAsserts(E:Equation ES:EquationSet) = assert E:Equation and $filterEqnAsserts(ES:EquationSet) if
+        (ceq T1:Term = T2:Term if C:EqCondition [nonexec AS:AttrSet] .) := E:Equation .
+    eq $filterEqnAsserts(E:Equation ES:EquationSet) = $filterEqnAsserts(ES:EquationSet) [owise] .
+
+	eq $filterMbaxAsserts((none).MembAxSet) = trivial .
+    ceq $filterMbaxAsserts(Mb:MembAx MbS:MembAxSet) = assert Mb:MembAx and $filterMbaxAsserts(MbS:MembAxSet) if
+        (mb T:Term : S:Sort [nonexec AS:AttrSet] .) := Mb:MembAx .
+    ceq $filterMbaxAsserts(Mb:MembAx MbS:MembAxSet) = assert Mb:MembAx and $filterMbaxAsserts(MbS:MembAxSet) if
+        (cmb T:Term : S:Sort if C:EqCondition [nonexec AS:AttrSet] .) := Mb:MembAx .
+    eq $filterMbaxAsserts(Mb:MembAx MbS:MembAxSet) = $filterMbaxAsserts(MbS:MembAxSet) [owise] .
+
+	eq $filterRuleAsserts((none).RuleSet) = trivial .
+    ceq $filterRuleAsserts(R:Rule RS:RuleSet) = assert R:Rule and $filterRuleAsserts(RS:RuleSet) if
+        (rl T1:Term => T2:Term [nonexec AS:AttrSet] .) := R:Rule .
+    ceq $filterRuleAsserts(R:Rule RS:RuleSet) = assert R:Rule and $filterRuleAsserts(RS:RuleSet) if
+        (crl T1:Term => T2:Term if C:Condition [nonexec AS:AttrSet] .) := R:Rule .
+    eq $filterRuleAsserts(R:Rule RS:RuleSet) = $filterRuleAsserts(RS:RuleSet) [owise] .
+
+
+	sort Refutation .
+
+	op 
+		
 endm
