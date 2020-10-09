@@ -1,154 +1,217 @@
 mod CHECK is
     protecting META-LEVEL .
     protecting NAT .
-    protecting RANDOM .
-    extending CONFIGURATION .
+    protecting CONVERSION .
+    protecting EXT-BOOL .
 
-    op arity : OpDecl -> Nat [memo] .
-    eq arity((op N:Qid : TL:TypeList -> R:Type [A:AttrSet] .)) = size(TL:TypeList) .
+	sort Hypothesis .
+    sort GroundHypothesis .
 
-    op argTypes : OpDecl -> TypeList .
-    eq argTypes((op N:Qid : TL:TypeList -> R:Type [A:AttrSet] .)) = TL:TypeList .
+    subsort GroundHypothesis < Hypothesis .
 
-    op functor : OpDecl -> Constant .
-    eq functor((op N:Qid : TL:TypeList -> R:Type [A:AttrSet] .))  = qid(string(N:Qid) + "." + string(R:Type)) .
+    sort Entailment .
 
+    var Ent : Entailment .
+
+    var M : Module .
+
+    var D I0 : Nat .
+
+    var I : NzNat .
+
+    var N F : Qid .
+
+    var Op : OpDecl .
+    var OpS : OpDeclSet .
+
+    var TL : TypeList .
+    var NeTL : NeTypeList . 
+    vars RT Ty : Type .
+    vars Sr Sr0 : Sort .
+
+    vars T T1 T2 : Term .
+    vars GT GT1 GT2 : GroundTerm .
+    var NTL : NeTermList .
+
+    var AS : AttrSet .
+
+    var C C1 : Condition .
+
+    var Th : Substitution .
+
+    var Eq : Equation .
+    var EqS : EquationSet .
+
+    var Mb : MembAx .
+    var MbS : MembAxSet .
+
+    var R : Rule .
+    var RS : RuleSet .
+
+    sort TypedVariable .
+    sort TypedVariableSet .
+    subsort TypedVariable < TypedVariableSet .
+
+    var V : Variable .
+    var TV : TypedVariable .
+    vars TVS TVS1 : TypedVariableSet .
+
+    op none : -> TypedVariableSet [ctor] .
+    op {_:_} : Variable Type -> TypedVariable [ctor] .
+    op __ : TypedVariableSet TypedVariableSet -> TypedVariableSet [ctor assoc comm id: (none).TypedVariableSet prec 40] .
     
-    op nil : -> OpDeclList [ctor] .
-    op _,_ : OpDeclList OpDeclList -> OpDeclList  [ctor assoc prec 121  gather (e E) id: nil] .
-    op _,_ : NeOpDeclList OpDeclList -> NeOpDeclList  [ctor assoc prec 121  gather (e E) id: nil] .
-    op _,_ : OpDeclList NeOpDeclList -> NeOpDeclList  [ctor assoc prec 121  gather (e E) id: nil] .
+    eq TV TV = TV .
 
-    op getCtors : Module Type -> OpDeclList [memo] .
-    op $filterCtors : Module Type OpDeclSet -> OpDeclList .
-
-    eq getCtors(M:Module, T:Type) = $filterCtors(M:Module, T:Type, getOps(M:Module)) .
-
-    eq $filterCtors(M:Module, T:Type, (none).OpDeclSet) = nil .
-    ceq $filterCtors(M:Module, T:Type, (O:OpDecl OS:OpDeclSet)) = O:OpDecl, $filterCtors(M:Module, T:Type, OS:OpDeclSet) if
-        (op N:Qid : Args:TypeList -> Ret:Type [ctor AS:AttrSet].) := O:OpDecl /\
-        sortLeq(M:Module, Ret:Type, T:Type) .
-    eq $filterCtors(M:Module, T:Type, (O:OpDecl OS:OpDeclSet)) = $filterCtors(M:Module, T:Type, OS:OpDeclSet) [owise] .
-
-    op filterArity : OpDeclList Nat -> OpDeclList .
-    eq filterArity(nil, N:Nat) = nil .
-    ceq filterArity((O:OpDecl, OL:OpDeclList), N:Nat) = O:OpDecl, filterArity(OL:OpDeclList, N:Nat) if arity(O:OpDecl) == N:Nat .
-    eq filterArity((O:OpDecl, OL:OpDeclList), N:Nat) = filterArity(OL:OpDeclList, N:Nat) [owise] .
+    op tauto : -> GroundHypothesis [ctor] .
     
-    op size : OpDeclList -> Nat .
-    eq size((nil).OpDeclList) = 0 .
-    eq size((O:OpDecl, L:OpDeclList)) = s size(L:OpDeclList) .
+    op [_=_] : Term Term -> Hypothesis [ctor] .
+    op [_=_] : GroundTerm GroundTerm -> GroundHypothesis [ctor] .
 
-    op $choose : Nat NeOpDeclList -> OpDecl .
-    eq $choose(0, (O:OpDecl, L:OpDeclList)) = O:OpDecl .
-    eq $choose(s N:Nat, (O:OpDecl, L:NeOpDeclList)) = $choose(N:Nat, L:NeOpDeclList) .
-
-    op $randomOpDecl : Module Nat Nat Type -> OpDecl .
-    ceq $randomOpDecl(M:Module, L:Nat, I:Nat, T:Type) = $choose(N:Nat, Ctors0:NeOpDeclList) if
-          Ctors:NeOpDeclList := getCtors(M:Module, T:Type) /\
-          Ctors0:NeOpDeclList := if L:Nat :: Zero then filterArity(Ctors:NeOpDeclList, 0) else Ctors:NeOpDeclList fi /\
-          NC:NzNat := size(Ctors0:NeOpDeclList) /\ N:Nat := random(I:Nat) rem NC:NzNat .
-
-	op randomTermList : Module Nat Nat TypeList -> RandomTermList .
-	op randomTerm : Module Nat Nat Type -> RandomTerm .
-    op $randomTerm : Module OpDecl Nat Nat -> RandomTerm .
-
-	eq randomTermList(M:Module, L:Nat, I:Nat, nil) = empty : I:Nat .
-	ceq randomTermList(M:Module, L:Nat, I:Nat, T:Type TL:TypeList) =
-		R:Term, RL:TermList : IX:Nat if R:Term : I0:Nat := randomTerm(M:Module, L:Nat, I:Nat, T:Type) /\
-        RL:TermList : IX:Nat := randomTermList(M:Module, L:Nat, I0:Nat, TL:TypeList) .
-
-    eq randomTerm(M:Module, L:Nat, I:Nat, T:Type) =
-        $randomTerm(M:Module, $randomOpDecl(M:Module, L:Nat, I:Nat, T:Type), L:Nat, s I:Nat) .
-
-	ceq $randomTerm(M:Module, O:OpDecl, L:Nat, I:Nat) = functor(O:OpDecl) : I:Nat if arity(O:OpDecl) : Zero .
-	ceq $randomTerm(M:Module, (op N:Qid : TL:TypeList -> RT:Type [A:AttrSet] .), s L:Nat, I:Nat) =
-		N:Qid[RL:TermList] : IX:Nat if
-		RL:TermList : IX:Nat := randomTermList(M:Module, L:Nat, I:Nat, TL:TypeList) .
+    op [_:_] : Term Sort -> Hypothesis [ctor] .
+    op [_:_] : GroundTerm Sort -> GroundHypothesis [ctor] .
     
-    sort VariableSet .
-    sorts NeVariableSet .
-    subsort NeVariableSet < VariableSet .
+    op [_=>_] : Term Term -> Hypothesis [ctor] .
+    op [_=>_] : GroundTerm Term -> GroundHypothesis [ctor] .
 
-    op none : -> VariableSet [ctor] .
-    op var_ : Variable -> VariableSet [ctor] .
-    op _;_ : VariableSet VariableSet -> VariableSet [ctor assoc comm id: (none).VariableSet prec 122] .
-    op _;_ : NeVariableSet VariableSet -> NeVariableSet [ctor ditto] .
-    op _;_ : VariableSet NeVariableSet -> NeVariableSet [ctor ditto] .
+    op let_=_in_ : Term Term Hypothesis -> Hypothesis [ctor prec 15] .
 
-    eq var V:Variable ; var V:Variable = var V:Variable .
+    op forall_:_ : TypedVariableSet Hypothesis -> Hypothesis [ctor prec 15] .
+
+    op _->_ : Hypothesis Hypothesis -> Hypothesis [ctor prec 61 gather (E e)] .
+    op _->_ : GroundHypothesis GroundHypothesis -> GroundHypothesis [ctor prec 61 gather (E e)] .
+
+    vars H H1 H2 : Hypothesis .
+    vars GH GH1 GH2 : GroundHypothesis .
     
-    op termVars : Term -> VariableSet .
-    op termVars : TermList -> VariableSet .
+	op |-_ : Module -> Entailment [ctor]  .
+	op _|-_ : Module Hypothesis -> Entailment [ctor prec 64] .
+    op _|-/-_ : Module GroundHypothesis -> Entailment [ctor prec 64] .
+
+    op $constant : Qid Type -> Constant [memo] .
+    eq $constant(N, RT)  = qid(string(N) + "." + string(RT)) .
+
+    op $qid : Qid -> Constant [memo] .
+    eq $qid(N) = qid("'" + string(N) + ".Qid") .
+	
+    var Const : Constant .
+
+    op _\_ : TypedVariableSet TypedVariableSet -> TypedVariableSet [gather (E e)] .
+
+    eq (TV TVS) \ (TV TVS1) = TVS \ TVS1 .
+    eq TVS \ TVS1 = TVS [owise] .
     
-    eq termVars(V:Variable) = var V:Variable .
-    eq termVars(C:Constant) = (none).VariableSet .
-    eq termVars(F:Qid[TL:TermList]) = termVars(TL:TermList) .
-    eq termVars(empty) = (none).VariableSet .
-    eq termVars((T:Term, TL:NeTermList)) = termVars(T:Term); termVars(TL:NeTermList) .
+    op termVars : Term -> TypedVariableSet  .
+    op termVars : TermList -> TypedVariableSet  .
     
-	op substitute : Substitution Term -> Term .
+    eq termVars(V) = {V : getType(V)} .
+    eq termVars(Const) = (none).TypedVariableSet .
+    eq termVars(F[NTL]) = termVars(NTL) .
+    eq termVars(empty) = (none).TypedVariableSet .
+    eq termVars((T, NTL)) = termVars(T) termVars(NTL) .
+
+    op freeVars : Hypothesis -> TypedVariableSet .
+    eq freeVars(tauto) = (none).TypedVariableSet .
+    eq freeVars([T1 = T2]) = termVars(T1) termVars(T2) .
+    eq freeVars([T : Sr]) = termVars(T) .
+    eq freeVars([T1 => T2]) = termVars(T1) termVars(T2) .
+    eq freeVars(let T1 = T2 in H) = freeVars(H) termVars(T2) \ termVars(T1) .
+    eq freeVars(forall TVS : H) = freeVars(H) \ TVS .
+    eq freeVars(H1 -> H2) = freeVars(H1) freeVars(H2) .
+    
+	op substitute : Substitution Term -> Term  .
 	op substitute : Substitution TermList -> TermList .
+    op substitute : Substitution Hypothesis -> Hypothesis .
 
-	eq substitute(S:Substitution, empty) = empty .
-	eq substitute(S:Substitution, (T:Term, TL:NeTermList)) = substitute(S:Substitution, T:Term), substitute(S:Substitution, TL:NeTermList) .
-	eq substitute((V:Variable <- T0:Term ; S:Substitution), V:Variable) = T0:Term .
-	eq substitute(S:Substitution, F:Qid[TL:NeTermList]) = F:Qid[substitute(S:Substitution, TL:NeTermList)] .
-	eq substitute(S:Substitution, T:Term) = T:Term [owise] .
+	eq substitute(Th, empty) = empty .
+	eq substitute(Th, (T, NTL)) = substitute(Th, T), substitute(Th, NTL) .
+	eq substitute((V <- T1 ; Th), V) = T1 .
+	eq substitute(Th, F[NTL]) = F[substitute(Th, NTL)] .
+	eq substitute(Th, T) = T [owise] .
 
-	op randomSubstitution : Module Nat Nat VariableSet -> RandomSubstitution .
+    eq substitute(Th, tauto) = tauto .
+    eq substitute(Th, [T1 = T2]) = [substitute(Th, T1) = substitute(Th, T2)] .
+    eq substitute(Th, [T1 => T2]) = [substitute(Th, T1) => substitute(Th, T2)] .
+    eq substitute(Th, [T : Sr]) = [substitute(Th, T) : Sr] .
+    eq substitute(Th, H1 -> H2) = substitute(Th, H1) -> substitute(Th, H2) .
+    eq substitute(Th, let T1 = T2 in H) = let substitute(Th, T1) = substitute(Th, T2) in substitute(Th, H) .
+    eq substitute(Th, forall TVS : H) = forall TVS : substitute(Th, H) .
 
-	eq randomSubstitution(M:Module, L:Nat, I:Nat, (none).VariableSet) = (none).Substitution : I:Nat .
-	ceq randomSubstitution(M:Module, L:Nat, I:Nat, (var V:Variable ; VS:VariableSet)) =
-	 	V:Variable <- R:Term ; S:Substitution : IX:Nat if
-	 	  R:Term : I0:Nat := randomTerm(M:Module, L:Nat, I:Nat, getType(V:Variable)) /\
-		  S:Substitution : IX:Nat := randomSubstitution(M:Module, L:Nat, I0:Nat, VS:VariableSet) .
-
-    sort AssertionSet .
-    sort NeAssertionSet .
-    sort Assertion .
-    subsort Assertion < NeAssertionSet .
-    subsort NeAssertionSet < AssertionSet .
-
-    op trivial : -> AssertionSet [ctor] .
-    op _and_ : AssertionSet AssertionSet -> AssertionSet [ctor comm assoc id: trivial prec 55] .
-    op assert_ : Equation -> Assertion [ctor] .
-    op assert_ : MembAx -> Assertion [ctor] .
-    op assert_ : Rule -> Assertion [ctor] .
+    op statementToHypothesis : Equation -> Hypothesis .
+    op statementToHypothesis : MembAx -> Hypothesis .
+    op statementToHypothesis : Rule -> Hypothesis .
     
-    op getAssertions : Module  -> AssertionSet [memo] .
-    op $filterEqnAsserts : EquationSet -> AssertionSet .
-    op $filterMbaxAsserts : MembAxSet -> AssertionSet .
-    op $filterRuleAsserts : RuleSet -> AssertionSet .
+    op conditionToHypothesis : Condition Hypothesis -> Hypothesis .
 
-    eq getAssertions(M:Module) = $filterEqnAsserts(getEqs(M:Module)) and
-        $filterMbaxAsserts(getMbs(M:Module)) and
-        $filterRuleAsserts(getRls(M:Module)) .
+    eq statementToHypothesis(eq T1 = T2 [AS] .) = [T1 = T2] .
+    eq statementToHypothesis(ceq T1 = T2 if C [AS] .) = conditionToHypothesis(C, [T1 = T2]) .
 
-    eq $filterEqnAsserts((none).EquationSet) = trivial .
-    ceq $filterEqnAsserts(E:Equation ES:EquationSet) = assert E:Equation and $filterEqnAsserts(ES:EquationSet) if
-        (eq T1:Term = T2:Term [nonexec AS:AttrSet] .) := E:Equation .
-    ceq $filterEqnAsserts(E:Equation ES:EquationSet) = assert E:Equation and $filterEqnAsserts(ES:EquationSet) if
-        (ceq T1:Term = T2:Term if C:EqCondition [nonexec AS:AttrSet] .) := E:Equation .
-    eq $filterEqnAsserts(E:Equation ES:EquationSet) = $filterEqnAsserts(ES:EquationSet) [owise] .
+    eq statementToHypothesis(mb T : Sr [AS] .) = [T : Sr] .
+    eq statementToHypothesis(cmb T : Sr if C [AS] .) = conditionToHypothesis(C, [T : Sr]) .
 
-	eq $filterMbaxAsserts((none).MembAxSet) = trivial .
-    ceq $filterMbaxAsserts(Mb:MembAx MbS:MembAxSet) = assert Mb:MembAx and $filterMbaxAsserts(MbS:MembAxSet) if
-        (mb T:Term : S:Sort [nonexec AS:AttrSet] .) := Mb:MembAx .
-    ceq $filterMbaxAsserts(Mb:MembAx MbS:MembAxSet) = assert Mb:MembAx and $filterMbaxAsserts(MbS:MembAxSet) if
-        (cmb T:Term : S:Sort if C:EqCondition [nonexec AS:AttrSet] .) := Mb:MembAx .
-    eq $filterMbaxAsserts(Mb:MembAx MbS:MembAxSet) = $filterMbaxAsserts(MbS:MembAxSet) [owise] .
+    eq statementToHypothesis(rl T1 => T2 [AS] .) = [T1 => T2] .
+    eq statementToHypothesis(crl T1 => T2 if C [AS] .) = conditionToHypothesis(C, [T1 => T2]) .
 
-	eq $filterRuleAsserts((none).RuleSet) = trivial .
-    ceq $filterRuleAsserts(R:Rule RS:RuleSet) = assert R:Rule and $filterRuleAsserts(RS:RuleSet) if
-        (rl T1:Term => T2:Term [nonexec AS:AttrSet] .) := R:Rule .
-    ceq $filterRuleAsserts(R:Rule RS:RuleSet) = assert R:Rule and $filterRuleAsserts(RS:RuleSet) if
-        (crl T1:Term => T2:Term if C:Condition [nonexec AS:AttrSet] .) := R:Rule .
-    eq $filterRuleAsserts(R:Rule RS:RuleSet) = $filterRuleAsserts(RS:RuleSet) [owise] .
+    eq conditionToHypothesis(nil, H) = H .
+    eq conditionToHypothesis(T1 = T2 /\ C, H) = [T1 = T2] -> conditionToHypothesis(C, H) .
+    eq conditionToHypothesis(T : Sr /\ C, H) = [T : Sr] -> conditionToHypothesis(C, H) .
+    eq conditionToHypothesis(T1 => T2 /\ C, H) = [T1 => T2] -> conditionToHypothesis(C, H) .
+    eq conditionToHypothesis(T1 := T2 /\ C, H) = let T1 = T2 in conditionToHypothesis(C, H) .
+    
+    op closeHypothesis : Hypothesis -> Hypothesis .
+    eq closeHypothesis(H) = forall freeVars(H) : H .
 
+	op isNonexec : Equation -> Bool .
+	op isNonexec : MembAx -> Bool .
+	op isNonexec : Rule -> Bool .
 
-	sort Refutation .
+	eq isNonexec(eq T1 = T2 [nonexec AS] .) = true .
+    eq isNonexec(eq T1 = T2 [AS] .) = false .
+	eq isNonexec(ceq T1 = T2 if C [nonexec AS] .) = true .
+    eq isNonexec(ceq T1 = T2 if C [AS] .) = false [owise] .
 
-	op 
+	eq isNonexec(mb T : Sr [nonexec AS] .) = true .
+    eq isNonexec(mb T : Sr [AS] .) = false [owise] .
+	eq isNonexec(cmb T : Sr if C [nonexec AS] .) = true  .
+    eq isNonexec(cmb T : Sr if C [AS] .) = false [owise]  .
+
+	eq isNonexec(rl T1 => T2 [nonexec AS] .) = true .
+    eq isNonexec(rl T1 => T2 [AS] .) = false [owise] .
+	eq isNonexec(crl T1 => T2 if C [nonexec AS] .) = true .
+    eq isNonexec(crl T1 => T2 if C [AS] .) = false [owise] .
+
+    op $makeTypeArgs : Variable NeTypeList Nat -> NeTermList .
+    op $makeTypeArg : Variable Type Nat -> Variable .
+
+    eq $makeTypeArgs(V, Ty, I0) = $makeTypeArg(V, Ty, I0) .
+    eq $makeTypeArgs(V, Ty NeTL, I0) = $makeTypeArg(V, Ty, I0), $makeTypeArgs(V, NeTL, s I0) .
+
+    eq $makeTypeArg(V, Ty, I0) = qid(string(V) + "." + string(I0, 10) + ":" + string(Ty)) .
+
+    op $satisfy : Module GroundHypothesis -> Bool .
+
+    eq $satisfy(M, tauto) = true .
+    eq $satisfy(M, GH1 -> GH2) = if $satisfy(M, GH1) then $satisfy(M, GH2) else true fi .
+    eq $satisfy(M, [GT1 = GT2]) = metaReduce(M, GT1) == metaReduce(M, GT2) .
+    ceq $satisfy(M, [GT : Sr]) = sortLeq(M, Sr0, Sr) if {T, Sr0} := metaReduce(M, GT) .
+    eq $satisfy(M, [GT1 => T2]) = metaSearch(M, GT1, T2, nil, '*, unbounded, 0) :: ResultTriple  .
+    eq $satisfy(M, GH) = false [owise] .
+    
+	crl |- M => M |- closeHypothesis(statementToHypothesis(Eq)) if Eq EqS := getEqs(M) /\ isNonexec(Eq) .
+	crl |- M => M |- closeHypothesis(statementToHypothesis(Mb)) if Mb MbS := getMbs(M) /\ isNonexec(Mb) .
+	crl |- M => M |- closeHypothesis(statementToHypothesis(R)) if R RS := getRls(M) /\ isNonexec(R) .
+
+	rl M |- forall none : H => M |- H .
+	crl M |- GH => Ent if Ent := if $satisfy(M, GH) then M |- tauto else M |-/- GH fi .
+	crl M |- GH -> H1 => M |- H2 if H2 := if $satisfy(M, GH) then H1 else tauto fi .
+	crl M |- let T1 = GT in H => M |- substitute(Th, H) if 
+		  {Th, Ctx:Context} := metaXmatch(M, T1, GT, nil, 0, 0, 0) .
+    rl M |- forall {V : 'Qid} TVS : H => M |- forall TVS : substitute(V <- $qid(V), H) .
+	crl M |- forall {V : Ty} TVS : H => M |- forall TVS : substitute(V <- $constant(F, RT), H) if
+		  (op F : nil -> RT [ctor AS] .) OpS := getOps(M) /\ sortLeq(M, RT, Ty) .
+	crl M |- forall {V : Ty} TVS : H => M |- forall TVS : substitute(V <- F[$makeTypeArgs(V, NeTL, 0)], H) if
+		(op F : NeTL -> RT [ctor AS] .) OpS := getOps(M) /\ sortLeq(M, RT, Ty) .
+
 		
 endm
+
+

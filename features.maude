@@ -27,16 +27,22 @@ fmod FEATURESET{X :: TRIV} is
     eq merge((- F, Fs1), (+ F, Fs2)) = + F, merge(Fs1, Fs2) .
     eq merge(Fs1, Fs2) = Fs1, Fs2 [owise] .
 
+    eq merge(merge(Fs1, Fs2), Fs2) = merge(Fs1, Fs2) [nonexec] .
+    
     op subsumes : FeatureSet{X} FeatureSet{X} -> Bool .
     eq subsumes(empty, Fs) = true .
     eq subsumes((+ F, Fs1), (+ F, Fs2)) = subsumes(Fs1, Fs2) .
     eq subsumes((- F, Fs1), (- F, Fs2)) = subsumes(Fs1, Fs2) .
     eq subsumes(Fs1, Fs2) = false [owise] .
 
+    eq subsumes(Fs2, merge(Fs1, Fs2)) = true [nonexec] .
+    
     op inverse : FeatureSet{X} -> FeatureSet{X} .
     eq inverse(empty) = empty .
     eq inverse((+ F, Fs)) = - F, inverse(Fs) .
     eq inverse((- F, Fs)) = + F, inverse(Fs) .
+
+    eq inverse(Fs), Fs = empty [nonexec] .
 
     op size : FeatureSet{X} -> Nat .
     eq size(empty) = 0 .
@@ -47,6 +53,8 @@ fmod FEATURESET{X :: TRIV} is
     eq (+ F, Fs1) & (+ F, Fs2) = (+ F), (Fs1 & Fs2) .
     eq (- F, Fs1) & (- F, Fs2) = (- F), (Fs1 & Fs2) .
     eq Fs1 & Fs2 = empty [owise] .
+
+    eq subsumes(Fs1 & Fs2, Fs1) = true [nonexec] .
 
     op _\_ : FeatureSet{X} FeatureSet{X} -> FeatureSet{X} [prec 41 gather (E e) right id: empty] .
     eq (+ F, Fs1) \ (+ F, Fs2) = Fs1 \ Fs2 .
@@ -59,59 +67,6 @@ fmod FEATURESET{X :: TRIV} is
     eq distance((+ F, Fs1), (+ F, Fs2)) = distance(Fs1, Fs2) .
     eq distance((- F, Fs1), (- F, Fs2)) = distance(Fs1, Fs2) .
     eq distance((+ F, Fs1), (- F, Fs2)) = s distance(Fs1, Fs2) .
-
-
-    sort FeatureSetExpr{X} .
-    sort NcFeatureSetExpr{X} .
-
-    subsort FeatureSet{X} < FeatureSetExpr{X} .
-    subsort NcFeatureSetExpr{X} < FeatureSetExpr{X} .
-
-    vars Fse1 Fse2 : FeatureSetExpr{X} .
-    vars NcFs1 NcFs2 : NcFeatureSetExpr{X} .
-
-    op ?left : -> NcFeatureSetExpr{X} [ctor] .
-    op ?right : -> NcFeatureSetExpr{X} [ctor] .
-
-    op _,_ : FeatureSetExpr{X} FeatureSetExpr{X} -> FeatureSetExpr{X} [ctor assoc comm id: empty prec 121].
-    op _,_ : NcFeatureSetExpr{X} FeatureSetExpr{X} -> NcFeatureSetExpr{X} [ctor assoc comm id: empty prec 121].
-    op _,_ : FeatureSetExpr{X} NcFeatureSetExpr{X} -> NcFeatureSetExpr{X} [ctor assoc comm id: empty prec 121].
-
-    eq ?left, ?left = ?left .
-    eq ?right, ?right = ?right .
-
-    op _&_ : FeatureSetExpr{X} FeatureSetExpr{X} -> FeatureSetExpr{X} [ctor assoc comm prec 53] .
-    op _&_ : NcFeatureSetExpr{X} FeatureSetExpr{X} -> NcFeatureSetExpr{X} [ctor assoc comm prec 53] .
-    op _&_ : FeatureSetExpr{X} NcFeatureSetExpr{X} -> NcFeatureSetExpr{X} [ctor assoc comm prec 53] .
-
-    eq ?left & ?left = ?left .
-    eq ?right & ?right = ?left .
-    eq ?left & empty = empty .
-    eq ?right & empty = empty .
-
-
-    op _\_ : FeatureSetExpr{X} FeatureSetExpr{X} -> FeatureSetExpr{X} [ctor prec 41 gather (E e) right id: empty] .
-    op _\_ : NcFeatureSetExpr{X} FeatureSetExpr{X} -> NcFeatureSetExpr{X} [ctor prec 41 gather (E e) right id: empty] .
-    op _\_ : FeatureSetExpr{X} NcFeatureSetExpr{X} -> NcFeatureSetExpr{X} [ctor prec 41 gather (E e) right id: empty] .
-
-    eq ?left \ ?left = empty .
-    eq ?right \ ?right = empty .
-
-    op merge : NcFeatureSetExpr{X} FeatureSetExpr{X} -> NcFeatureSetExpr{X} [ctor] .
-    op merge : FeatureSetExpr{X} NcFeatureSetExpr{X} -> NcFeatureSetExpr{X} [ctor] .
-
-    op inverse : NcFeatureSetExpr{X} -> NcFeatureSetExpr{X} [ctor] .
-
-    op combine : FeatureSetExpr{X} FeatureSet{X} FeatureSet{X} -> FeatureSet{X} .
-
-    eq combine(?left, Fs1, Fs2) = Fs1 .
-    eq combine(?right, Fs1, Fs2) = Fs2 .
-    eq combine((NcFs1, Fse1), Fs1, Fs2) = combine(NcFs1, Fs1, Fs2), combine(Fse1, Fs1, Fs2) .
-    eq combine(NcFs1 & Fse1, Fs1, Fs2) = combine(NcFs1, Fs1, Fs2) & combine(Fse1, Fs1, Fs2) .
-    eq combine(Fse1 \ Fse2, Fs1, Fs2) = combine(Fse1, Fs1, Fs2) \ combine(Fse2, Fs1, Fs2) .
-    eq combine(merge(Fse1, Fse2), Fs1, Fs2) = merge(combine(Fse1, Fs1, Fs2), combine(Fse2, Fs1, Fs2)) .
-    eq combine(inverse(Fse1), Fs1, Fs2) = inverse(combine(Fse1, Fs1, Fs2)) .
-    eq combine(Fs, Fs1, Fs2) = Fs1 [owise] .
 
 endfm
 
